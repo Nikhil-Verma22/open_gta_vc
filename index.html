@@ -108,6 +108,14 @@
             align-items: center;
             gap: 6px;
             font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .status-badge.ready {
+            border-color: #10b981;
+            color: #6ee7b7;
+            background: rgba(16, 185, 129, 0.2);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
         }
 
         .btn {
@@ -168,6 +176,72 @@
             height: 100%;
             border: none;
             background: #000;
+            display: block;
+        }
+
+        /* In-Game Full Viewport Mode */
+        body.in-game {
+            overflow: hidden !important;
+        }
+
+        body.in-game header,
+        body.in-game footer {
+            display: none !important;
+        }
+
+        body.in-game main {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 1000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        body.in-game #game-frame-container {
+            width: 100vw !important;
+            height: 100vh !important;
+            position: fixed !important;
+            inset: 0 !important;
+            background: #000 !important;
+        }
+
+        /* Floating Quick Controls Bar in game */
+        .game-quick-bar {
+            position: fixed;
+            top: 12px;
+            right: 16px;
+            z-index: 10002;
+            display: flex;
+            gap: 8px;
+            opacity: 0.35;
+            transition: opacity 0.25s ease;
+        }
+
+        .game-quick-bar:hover {
+            opacity: 1;
+        }
+
+        .quick-btn {
+            background: rgba(18, 9, 44, 0.85);
+            border: 1px solid var(--neon-pink);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .quick-btn:hover {
+            background: var(--neon-pink);
+            color: #fff;
+            box-shadow: 0 0 12px var(--neon-pink);
+            transform: translateY(-1px);
         }
 
         /* Launcher Landing Card (shown before or above game) */
@@ -307,32 +381,151 @@
         .progress-box {
             display: none;
             flex-direction: column;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 10px;
+            margin-top: 15px;
+            background: rgba(10, 4, 30, 0.88);
+            border: 1px solid rgba(255, 65, 147, 0.45);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(255, 65, 147, 0.12);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .progress-title {
+            font-size: 0.85rem;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 8px rgba(36, 158, 245, 0.6);
+            text-transform: uppercase;
+        }
+
+        .progress-pct-badge {
+            font-size: 0.95rem;
+            font-weight: 900;
+            color: #fff;
+            background: linear-gradient(135deg, var(--neon-pink), #a21caf);
+            padding: 2px 10px;
+            border-radius: 12px;
+            box-shadow: 0 0 10px rgba(255, 65, 147, 0.5);
         }
 
         .progress-bar-bg {
             width: 100%;
-            height: 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
+            height: 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
             overflow: hidden;
-            border: 1px solid rgba(255, 65, 147, 0.4);
+            border: 1px solid rgba(255, 65, 147, 0.5);
+            position: relative;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
         }
 
         .progress-bar-val {
             height: 100%;
             width: 0%;
-            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
-            transition: width 0.15s ease;
-            box-shadow: 0 0 10px var(--neon-pink);
+            background: linear-gradient(90deg, #249ef5, #ec4899, #fde047);
+            background-size: 200% 100%;
+            animation: gradient-shimmer 2s ease infinite;
+            transition: width 0.12s ease;
+            box-shadow: 0 0 15px rgba(255, 65, 147, 0.8);
+            border-radius: 6px;
+        }
+
+        @keyframes gradient-shimmer {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
 
         .progress-info {
             display: flex;
             justify-content: space-between;
-            font-size: 0.8rem;
+            font-size: 0.82rem;
+            color: #cbd5e1;
+            font-weight: 600;
+        }
+
+        .progress-file {
+            font-size: 0.72rem;
+            color: #94a3b8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: left;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.45);
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Bottom-Right Floating Loading Circle */
+        .bottom-right-loader {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 18px;
+            background: rgba(14, 8, 38, 0.94);
+            border: 2px solid var(--neon-pink);
+            border-radius: 40px;
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 65, 147, 0.5);
+            backdrop-filter: blur(12px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .bottom-right-loader.hidden {
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+            pointer-events: none;
+        }
+
+        .neon-spinner-circle {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 65, 147, 0.2);
+            border-top: 3px solid var(--neon-cyan);
+            border-right: 3px solid var(--neon-pink);
+            border-radius: 50%;
+            animation: neon-spin 0.75s linear infinite;
+            flex-shrink: 0;
+            box-shadow: 0 0 12px rgba(36, 158, 245, 0.5);
+        }
+
+        @keyframes neon-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .bottom-right-text {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+
+        .spinner-title {
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .spinner-subtitle {
+            font-size: 0.72rem;
             color: #a78bfa;
+            font-weight: 600;
         }
 
         /* Controls Guide Modal */
@@ -418,7 +611,7 @@
         </div>
 
         <div class="header-actions">
-            <div id="assetStatus" class="status-badge">Checking assets...</div>
+            <div id="assetStatus" class="status-badge ready">● Assets Ready</div>
             <button class="btn btn-secondary" onclick="toggleControlsModal()">🎮 Controls</button>
             <button id="headerSelectBtn" class="btn" onclick="document.getElementById('folderInput').click()">📁 Select Assets</button>
             <button id="fullscreenBtn" class="btn btn-secondary" onclick="toggleFullscreen()" style="display:none;">⛶ Fullscreen</button>
@@ -426,6 +619,13 @@
     </header>
 
     <main>
+        <!-- Floating quick controls in-game -->
+        <div id="gameQuickBar" class="game-quick-bar" style="display:none;">
+            <button class="quick-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶ Fullscreen</button>
+            <button class="quick-btn" onclick="toggleControlsModal()" title="View Controls">🎮 Controls</button>
+            <button class="quick-btn" onclick="exitToLauncher()" title="Return to Launcher">✕ Launcher</button>
+        </div>
+
         <!-- The Game Frame (hosts the isolated Emscripten runtime) -->
         <div id="game-frame-container">
             <iframe id="gameFrame" src="engine.html" allow="autoplay; fullscreen; gamepad; pointer-lock"></iframe>
@@ -437,7 +637,7 @@
                 <h1 class="neon-heading">Grand Theft Auto: Vice City</h1>
                 <p class="launcher-desc">
                     Experience the complete 1980s Miami adventure right in your browser via WebAssembly.<br>
-                    Compatible with your original Vice City game data.
+                    Zero configuration required — assets stream directly into the browser runtime.
                 </p>
 
                 <div id="dropzone" class="dropzone" style="display:none;" onclick="document.getElementById('folderInput').click()">
@@ -450,7 +650,7 @@
                 <div class="options-grid">
                     <label class="option-item">
                         <input type="checkbox" id="idbCacheToggle" checked>
-                        <span>Cache assets in IndexedDB (fast future play)</span>
+                        <span>Cache assets in IndexedDB (instant future play)</span>
                     </label>
                     <label class="option-item">
                         <input type="checkbox" id="cloudSavesToggle" checked>
@@ -458,14 +658,20 @@
                     </label>
                 </div>
 
+                <!-- Asset Loading Bar with Real-Time Metrics -->
                 <div id="progressBox" class="progress-box">
+                    <div class="progress-header">
+                        <span class="progress-title">🌴 Preloading Assets</span>
+                        <span id="progressPct" class="progress-pct-badge">0%</span>
+                    </div>
                     <div class="progress-bar-bg">
                         <div id="progressBar" class="progress-bar-val"></div>
                     </div>
                     <div class="progress-info">
-                        <span id="progressStatus">Preloading game data...</span>
-                        <span id="progressPct">0%</span>
+                        <span id="progressStatus">Initializing asset stream...</span>
+                        <span id="progressStats">0 / 0 files (0.0 MB)</span>
                     </div>
+                    <div id="progressFile" class="progress-file">Preparing virtual filesystem...</div>
                 </div>
 
                 <button id="playBtn" class="btn-launch-game" onclick="startPlay()">▶ PLAY VICE CITY</button>
@@ -476,11 +682,20 @@
                 <div style="font-size:0.75rem; color:#64748b; line-height:1.4;">
                     <strong>Legal & Attribution Notice:</strong><br>
                     This is an open-source WebAssembly implementation of reVC by the <a href="https://dos.zone/revcdos" target="_blank" rel="noopener" style="color:#38bdf8;">DOS.Zone Team</a>.<br>
-                    GTA Vice City is &copy; Rockstar Games / Take-Two Interactive. Game assets are loaded locally from your own device and are never uploaded to any server.
+                    GTA Vice City is &copy; Rockstar Games / Take-Two Interactive. Game assets are loaded directly in your browser.
                 </div>
             </div>
         </div>
     </main>
+
+    <!-- Bottom-Right Animated Loading Circle -->
+    <div id="bottomRightSpinner" class="bottom-right-loader hidden">
+        <div class="neon-spinner-circle"></div>
+        <div class="bottom-right-text">
+            <div class="spinner-title">🌴 Vice City</div>
+            <div id="spinnerText" class="spinner-subtitle">Loading engine...</div>
+        </div>
+    </div>
 
     <!-- Controls Modal -->
     <div id="controlsModal" class="modal-overlay" onclick="if(event.target===this) toggleControlsModal()">
@@ -515,7 +730,17 @@
     </footer>
 
     <script>
-        // IndexedDB Cache Setup for Option A
+        // Trailing-slash normalization so relative asset URLs always resolve correctly
+        if (window.location.pathname && !window.location.pathname.endsWith('/') && !window.location.pathname.endsWith('.html')) {
+            const cleanPath = window.location.pathname + '/' + window.location.search + window.location.hash;
+            window.history.replaceState(null, '', cleanPath);
+        }
+
+        const ASSET_PREFIX = 'gtavc-assets/local';
+        const BASE_HREF = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+        const ASSET_BASE = BASE_HREF + ASSET_PREFIX + '/';
+
+        // IndexedDB Cache Setup for Fast Reloads
         const DB_NAME = 'GTA_VC_ASSETS_CACHE';
         const DB_VERSION = 1;
         const STORE_NAME = 'files';
@@ -561,9 +786,6 @@
                 });
             } catch (e) {}
         }
-
-        const ASSET_PREFIX = 'gtavc-assets/local';
-        const ASSET_BASE = new URL(`${ASSET_PREFIX}/`, window.location.href).href;
 
         function normalizeAssetRel(rel) {
             if (!rel) return '';
@@ -612,27 +834,21 @@
             });
         }
 
-        // Auto-detect self-hosted assets
+        // Auto-detect self-hosted assets in background without blocking launcher
         async function checkServerAssets() {
             try {
-                const res = await fetch('gtavc-assets/local/data/gta_vc.dat', { method: 'HEAD' });
-                if (res.ok) {
+                const testUrl = ASSET_BASE + 'data/gta_vc.dat?check=' + Date.now();
+                const res = await fetch(testUrl, { method: 'GET', headers: { 'Range': 'bytes=0-64' } });
+                if (res.ok || res.status === 206) {
                     serverHasAssets = true;
                     const badge = document.getElementById('assetStatus');
                     badge.textContent = '● Self-Hosted Assets Online';
-                    badge.style.borderColor = '#10b981';
-                    badge.style.color = '#6ee7b7';
-                    badge.style.background = 'rgba(16, 185, 129, 0.2)';
-
-                    const playBtn = document.getElementById('playBtn');
-                    playBtn.disabled = false;
-                    playBtn.textContent = '▶ PLAY VICE CITY';
-                    return true;
+                    badge.className = 'status-badge ready';
                 }
-            } catch (e) {}
-            return false;
+            } catch (e) {
+                // If offline or custom path, keep ready status
+            }
         }
-
         checkServerAssets();
 
         // Optional folder input
@@ -647,9 +863,9 @@
                 filesMap.set(normalizeKey(f.webkitRelativePath), f);
             }
             const count = filesMap.size;
-            document.getElementById('assetStatus').textContent = `● ${count} Custom Files Loaded`;
-            document.getElementById('assetStatus').style.borderColor = '#10b981';
-            document.getElementById('assetStatus').style.color = '#6ee7b7';
+            const badge = document.getElementById('assetStatus');
+            badge.textContent = `● ${count} Custom Files Loaded`;
+            badge.className = 'status-badge ready';
 
             document.getElementById('dropzoneLabel').textContent = `${count} custom files loaded!`;
             const playBtn = document.getElementById('playBtn');
@@ -694,6 +910,10 @@
             }
         }
 
+        // Memory buffer cache for parallel prefetching
+        const memoryBufferCache = new Map();
+        let totalBytesLoaded = 0;
+
         async function getAssetBuffer(path) {
             const candidates = assetCandidates(path);
 
@@ -702,7 +922,7 @@
                 const k = cand.toLowerCase();
                 if (filesMap.has(k)) {
                     const buf = await readFileAsync(filesMap.get(k));
-                    if (document.getElementById('idbCacheToggle').checked) {
+                    if (document.getElementById('idbCacheToggle') && document.getElementById('idbCacheToggle').checked) {
                         putCachedFile(k, buf);
                     }
                     return buf;
@@ -721,11 +941,11 @@
             // 3. Direct HTTP fetch from self-hosted gtavc-assets/local/
             for (const cand of candidates) {
                 try {
-                    const url = new URL(`${ASSET_PREFIX}/${cand}`, window.location.href).href;
+                    const url = ASSET_BASE + cand;
                     const res = await fetch(url);
                     if (res.ok) {
                         const buf = await res.arrayBuffer();
-                        if (document.getElementById('idbCacheToggle').checked) {
+                        if (document.getElementById('idbCacheToggle') && document.getElementById('idbCacheToggle').checked) {
                             putCachedFile(cand.toLowerCase(), buf);
                         }
                         return buf;
@@ -736,28 +956,94 @@
             return null;
         }
 
+        let isGameStarted = false;
+        let startRetryTimer = null;
+
         function startPlay() {
+            if (isGameStarted) return;
+            isGameStarted = true;
+
+            // Switch to full in-game viewport layout
+            document.body.classList.add('in-game');
+            document.getElementById('gameQuickBar').style.display = 'flex';
+
+            // Show asset loading bar in launcher card
             document.getElementById('progressBox').style.display = 'flex';
             document.getElementById('playBtn').disabled = true;
             document.getElementById('playBtn').textContent = 'Launching Engine...';
 
-            const iframe = document.getElementById('gameFrame');
-            // Notify iframe to start
-            iframe.contentWindow.postMessage({ event: 'host.start' }, '*');
+            // Show bottom-right floating animated loading circle
+            const spinner = document.getElementById('bottomRightSpinner');
+            spinner.classList.remove('hidden');
+            document.getElementById('spinnerText').textContent = 'Loading game assets...';
 
-            // Hide launcher modal after short delay
-            setTimeout(() => {
-                document.getElementById('launcherModal').classList.add('hidden');
-                document.getElementById('fullscreenBtn').style.display = 'inline-flex';
-            }, 800);
+            const iframe = document.getElementById('gameFrame');
+            function sendStart() {
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({ event: 'host.start' }, '*');
+                }
+            }
+            sendStart();
+            // Retry sending host.start periodically until initfs arrives
+            startRetryTimer = setInterval(sendStart, 600);
+        }
+
+        function exitToLauncher() {
+            document.body.classList.remove('in-game');
+            document.getElementById('launcherModal').classList.remove('hidden');
+            document.getElementById('gameQuickBar').style.display = 'none';
         }
 
         let initialFiles = [];
-        let currentFile = 0;
+        let currentFile = -1;
+        let prefetchIndex = 0;
+        const PREFETCH_CONCURRENCY = 10;
+
+        function startPrefetchWorkerPool() {
+            for (let i = 0; i < PREFETCH_CONCURRENCY; i++) {
+                fetchNextPrefetch();
+            }
+        }
+
+        async function fetchNextPrefetch() {
+            if (prefetchIndex >= initialFiles.length) return;
+            const file = initialFiles[prefetchIndex++];
+            const k = file.toLowerCase();
+            if (!memoryBufferCache.has(k)) {
+                memoryBufferCache.set(k, (async () => {
+                    const buf = await getAssetBuffer(file);
+                    if (buf) {
+                        totalBytesLoaded += buf.byteLength;
+                    }
+                    return buf;
+                })());
+            }
+            await memoryBufferCache.get(k);
+            fetchNextPrefetch();
+        }
 
         window.addEventListener('message', async (event) => {
             const data = event.data;
             if (!data || !data.event) return;
+
+            if (data.event === 'engine.ready') {
+                console.log('[index.html] Engine iframe ready');
+                if (isGameStarted) {
+                    const iframe = document.getElementById('gameFrame');
+                    iframe.contentWindow.postMessage({ event: 'host.start' }, '*');
+                }
+                return;
+            }
+
+            if (data.event === 'game.started') {
+                console.log('[index.html] Game started signal received from engine!');
+                // Dismiss the bottom-right loading circle
+                const spinner = document.getElementById('bottomRightSpinner');
+                if (spinner) {
+                    spinner.classList.add('hidden');
+                }
+                return;
+            }
 
             if (data.event === 'request-fullscreen') {
                 toggleFullscreen();
@@ -765,6 +1051,12 @@
             }
 
             if (data.event === 'module.initfs') {
+                if (startRetryTimer) {
+                    clearInterval(startRetryTimer);
+                    startRetryTimer = null;
+                }
+
+                document.getElementById('progressStatus').textContent = 'Loading manifest...';
                 const preloadText = await (await fetch("preload_files.list?v=" + Date.now())).text();
                 const rawLines = preloadText.split('\n')
                     .map(l => l.trim())
@@ -772,17 +1064,35 @@
 
                 initialFiles = Array.from(new Set(rawLines));
                 currentFile = -1;
+                prefetchIndex = 0;
+
+                // Start pipelined background prefetching
+                startPrefetchWorkerPool();
+
                 event.source.postMessage({ event: '>module.initfs', files: initialFiles.length }, '*');
             } else if (data.event === 'module.initfile') {
                 currentFile++;
-                const pct = Math.floor((currentFile / initialFiles.length) * 100);
+                const count = initialFiles.length;
+                const pct = Math.min(100, Math.floor((currentFile / count) * 100));
+                const loadedMB = (totalBytesLoaded / (1024 * 1024)).toFixed(1);
+
                 document.getElementById('progressBar').style.width = pct + '%';
                 document.getElementById('progressPct').textContent = pct + '%';
-                document.getElementById('progressStatus').textContent = `Loading resources (${currentFile}/${initialFiles.length})...`;
+                document.getElementById('progressStatus').textContent = `Streaming resources (${currentFile + 1} / ${count})`;
+                document.getElementById('progressStats').textContent = `${currentFile + 1} / ${count} files (${loadedMB} MB)`;
+                document.getElementById('spinnerText').textContent = `Loading assets (${pct}%)...`;
 
-                if (currentFile < initialFiles.length) {
+                if (currentFile < count) {
                     const path = initialFiles[currentFile];
-                    const buffer = await getAssetBuffer(path);
+                    document.getElementById('progressFile').textContent = path;
+
+                    let bufPromise = memoryBufferCache.get(path.toLowerCase());
+                    if (!bufPromise) {
+                        bufPromise = getAssetBuffer(path);
+                        memoryBufferCache.set(path.toLowerCase(), bufPromise);
+                    }
+                    const buffer = await bufPromise;
+
                     if (buffer) {
                         event.source.postMessage({
                             event: '>module.initfile',
@@ -797,7 +1107,23 @@
                         }, '*');
                     }
                 } else {
-                    document.getElementById('progressStatus').textContent = 'Starting Vice City...';
+                    document.getElementById('progressBar').style.width = '100%';
+                    document.getElementById('progressPct').textContent = '100%';
+                    document.getElementById('progressStatus').textContent = 'Starting Vice City engine...';
+                    document.getElementById('progressFile').textContent = 'Initializing WebAssembly & audio subsystem...';
+                    document.getElementById('spinnerText').textContent = 'Starting reVC engine...';
+
+                    // Smoothly hide launcher card after preload completes
+                    setTimeout(() => {
+                        document.getElementById('launcherModal').classList.add('hidden');
+                        document.getElementById('fullscreenBtn').style.display = 'inline-flex';
+                    }, 500);
+
+                    // Fallback to auto-hide bottom-right spinner after 10s if game.started not fired
+                    setTimeout(() => {
+                        const spinner = document.getElementById('bottomRightSpinner');
+                        if (spinner) spinner.classList.add('hidden');
+                    }, 10000);
                 }
             } else if (data.event === 'module.getasyncurl' && data.file) {
                 const buffer = await getAssetBuffer(data.file);
@@ -815,9 +1141,6 @@
                 }
             }
         });
-                }
-            }
-        });
 
         function toggleControlsModal() {
             const modal = document.getElementById('controlsModal');
@@ -825,7 +1148,7 @@
         }
 
         function toggleFullscreen() {
-            const elem = document.getElementById('game-frame-container');
+            const elem = document.documentElement;
             if (!document.fullscreenElement) {
                 elem.requestFullscreen().catch(() => {});
             } else {

@@ -85,13 +85,29 @@ async function loadData() {
 };
 
 async function startGame(e) {
-    e.stopPropagation();
+    if (e && e.stopPropagation) e.stopPropagation();
 
-    document.querySelector('.start-container').style.display = 'none';
-    document.querySelector('.developed-by').style.display = 'none';
-    document.querySelector('.click-to-play').style.display = 'none';
+    const startContainer = document.querySelector('.start-container');
+    if (startContainer) startContainer.style.display = 'none';
+    const devBy = document.querySelector('.developed-by');
+    if (devBy) devBy.style.display = 'none';
+    const ctp = document.querySelector('.click-to-play');
+    if (ctp) ctp.style.display = 'none';
 
     loadGame();
+}
+
+// Listen for start signal from parent host window (index.html)
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.event === 'host.start') {
+        console.log('[game.js] Received host.start, starting game...');
+        startGame(event);
+    }
+});
+
+// Notify parent host window that engine runtime is ready
+if (window.top !== window) {
+    window.top.postMessage({ event: 'engine.ready' }, '*');
 }
 
 function setStatus(text) {
@@ -326,6 +342,21 @@ async function loadGame() {
                 } catch (e) {}
 
                 Module['_async_main']();
+
+                // Signal game.started once first frames begin rendering
+                let framesRendered = 0;
+                function notifyStartedOnRender() {
+                    framesRendered++;
+                    if (framesRendered >= 2) {
+                        console.log('[game.js] Engine rendering active, notifying host');
+                        if (window.top !== window) {
+                            window.top.postMessage({ event: 'game.started' }, '*');
+                        }
+                        return;
+                    }
+                    requestAnimationFrame(notifyStartedOnRender);
+                }
+                requestAnimationFrame(notifyStartedOnRender);
             } catch (e) {
                 console.error('mainCalled error:', e);
             }
@@ -341,7 +372,14 @@ async function loadGame() {
             }
         },
         preRun: [],
-        postRun: [],
+        postRun: [
+            () => {
+                console.log('[game.js] Module.postRun executed');
+                if (window.top !== window) {
+                    window.top.postMessage({ event: 'game.started' }, '*');
+                }
+            }
+        ],
         print: (...args) => console.log(args.join(' ')),
         printErr: (...args) => console.error(args.join(' ')),
         canvas: function () {
@@ -600,10 +638,13 @@ const portBy = document.getElementById('port-by');
 portBy.textContent = t('portBy');
 
 
+const screenW = Math.min(Math.max(window.innerWidth || 1280, 1024), 1920);
+const screenH = Math.min(Math.max(window.innerHeight || 720, 576), 1080);
+
 const revc_iniDefault = `
 [VideoMode]
-Width=800
-Height=600
+Width=${screenW}
+Height=${screenH}
 Depth=32
 Subsystem=0
 Windowed=0
@@ -637,7 +678,7 @@ CarDensity=1.200000
 CutsceneBorders=1
 FreeCam=0
 [Graphics]
-AspectRatio=0
+AspectRatio=2
 VSync=1
 Trails=1
 FrameLimiter=0
@@ -719,9 +760,15 @@ UNKNOWN_ACTION=
 `;
 
 const revc_ini = (() => {
-    const cached = localStorage.getItem('vcsky.revc.ini');
-    if (cached) {
-        return cached;
+    let ini = localStorage.getItem('vcsky.revc.ini');
+    if (ini) {
+        // Enforce Auto Aspect Ratio (AspectRatio=2) to prevent wide/fat stretching
+        ini = ini.replace(/AspectRatio=\d+/g, 'AspectRatio=2');
+        if (ini.includes('Width=800') && ini.includes('Height=600')) {
+            ini = ini.replace('Width=800', `Width=${screenW}`).replace('Height=600', `Height=${screenH}`);
+        }
+        localStorage.setItem('vcsky.revc.ini', ini);
+        return ini;
     }
     return revc_iniDefault;
 })();

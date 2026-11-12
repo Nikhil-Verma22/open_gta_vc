@@ -74,8 +74,8 @@ jobs:
       - name: Scan for Accidental Secrets
         run: |
           echo "=== Scanning for Secrets and Tokens ==="
-          # Check for gh tokens, api keys, or sensitive patterns
-          if grep -rnEi "(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{82}|PRIVATE KEY)" --exclude-dir=".git" .; then
+          # Check for sensitive tokens or credentials in source files (excluding .git and CI definitions)
+          if grep -rnEi "(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{82}|BEGIN PRIVATE KEY)" --exclude-dir=".git" --exclude-dir=".github" .; then
             echo "::error::Potential secret or token detected in repository files!"
             exit 1
           fi

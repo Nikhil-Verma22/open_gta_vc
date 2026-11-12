@@ -1,0 +1,16 @@
+* text=auto
+*.img binary
+*.dir binary
+*.dff binary
+*.txd binary
+*.col binary
+*.ifp binary
+*.wav binary
+*.mp3 binary
+*.raw binary
+*.sdt binary
+*.dat binary
+*.gxt binary
+*.adf binary
+*.ttf binary
+*.wasm binary

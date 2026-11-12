@@ -56,8 +56,8 @@ class ViceCityHTTPHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_PORT
     
-    # Check if vc-assets exists locally
-    assets_dir = os.path.join(DIRECTORY, 'vc-assets')
+    # Check if gtavc-assets exists locally
+    assets_dir = os.path.join(DIRECTORY, 'gtavc-assets')
     has_assets = os.path.isdir(assets_dir)
     
     print("=" * 60)
@@ -66,9 +66,9 @@ if __name__ == '__main__':
     print(f"  Server URL: http://127.0.0.1:{port}/index.html")
     print(f"  Engine URL: http://127.0.0.1:{port}/engine.html")
     if has_assets:
-        print("  Local Assets: DETECTED ('vc-assets' found in directory)")
+        print("  Self-Hosted Assets: DETECTED ('gtavc-assets/local' ready)")
     else:
-        print("  Local Assets: NOT DETECTED (use browser folder picker or symlink 'vc-assets')")
+        print("  Self-Hosted Assets: NOT DETECTED")
     print("=" * 60)
     print("Press Ctrl+C to stop the server.\n")
 
@@ -78,3 +78,4 @@ if __name__ == '__main__':
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("\nServer stopped.")
+

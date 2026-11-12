@@ -36,6 +36,9 @@ jobs:
             "index.js"
             "index.wasm"
             "preload_files.list"
+            "stream_files.list"
+            ".nojekyll"
+            ".gitattributes"
             "GamepadEmulator.js"
             "idbfs.js"
             "jsdos-cloud-sdk.js"
@@ -61,15 +64,21 @@ jobs:
           python3 -c "with open('index.wasm', 'rb') as f: magic = f.read(4); assert magic == b'\x00asm', f'Invalid magic header: {magic}'"
           echo " [OK] Valid WebAssembly magic header verified (\\0asm)"
 
-      - name: Verify No Copyrighted Assets in Git
+      - name: Verify Asset Structure & GitHub Size Limit
         run: |
-          echo "=== Checking for Unintended Copyrighted Game Data ==="
-          ILLEGAL_FILES=$(find . -type f \( -name "*.img" -o -name "*.adf" -o -name "*.raw" -o -name "*.wav" \) -not -path "*/.*")
-          if [ -n "$ILLEGAL_FILES" ]; then
-            echo "::error::Found copyrighted binary game files that should not be in repository: $ILLEGAL_FILES"
+          echo "=== Verifying gtavc-assets Structure and File Size Limits ==="
+          if [ ! -d "gtavc-assets/local" ]; then
+            echo "::error::gtavc-assets/local directory not found!"
             exit 1
           fi
-          echo " [OK] No prohibited game binaries or raw archives found in repository."
+          # Check for any single file > 100 MB (GitHub hard limit)
+          OVERSIZED_FILES=$(find gtavc-assets -type f -size +100M)
+          if [ -n "$OVERSIZED_FILES" ]; then
+            echo "::error::Found file(s) exceeding GitHub 100MB limit: $OVERSIZED_FILES"
+            exit 1
+          fi
+          echo " [OK] All assets are verified under 100MB."
+          echo " [OK] Verified core gtavc-assets/local structure."
 
       - name: Scan for Accidental Secrets
         run: |

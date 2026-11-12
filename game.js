@@ -98,6 +98,42 @@ function setStatus(text) {
     console.log(text);
 };
 
+const ASSET_PREFIX = 'gtavc-assets/local';
+const ASSET_BASE = new URL(`${ASSET_PREFIX}/`, window.location.href).href;
+const PRELOAD_URL = new URL('preload_files.list?v=' + Date.now(), window.location.href).href;
+const STREAM_URL = new URL('stream_files.list?v=' + Date.now(), window.location.href).href;
+
+function normalizeAssetRel(rel) {
+    if (!rel) return '';
+    let p = rel.replaceAll('\\', '/').replaceAll('//', '/');
+    if (p.startsWith('/')) p = p.substring(1);
+    if (p.toLowerCase().startsWith('gtavc-assets/local/')) {
+        p = p.substring('gtavc-assets/local/'.length);
+    } else if (p.toLowerCase().startsWith('vc-assets/local/')) {
+        p = p.substring('vc-assets/local/'.length);
+    }
+    return p;
+}
+
+function assetCandidates(rel) {
+    const r = normalizeAssetRel(rel);
+    const out = [r];
+    
+    // Fallback: loose files extracted from gta3.img
+    let m = r.match(/^models\/([^/]+\.(dff|txd|col|ifp))$/i);
+    if (m) out.push(`models/gta3.img/${m[1].toLowerCase()}`);
+
+    m = r.match(/^models\/([^/]+)\/([^/]+\.(dff|txd|col|ifp))$/i);
+    if (m && m[1].toLowerCase() !== 'gta3.img' && m[1].toLowerCase() !== 'coll' && m[1].toLowerCase() !== 'generic') {
+        out.push(`models/gta3.img/${m[2].toLowerCase()}`);
+    }
+
+    if (r.endsWith('cuts.img')) {
+        out.push('anim/cuts.img');
+    }
+    return out;
+}
+
 async function loadGame() {
     var Module = {
         initFS: async () => {
@@ -112,20 +148,17 @@ async function loadGame() {
                     if (data.event === '>module.initfile' || data.event === '>module.initfs') {
                         if (data.event === '>module.initfile') {
                             try {
-                                const parts = data.path.split('/');
-                                let path = '';
-                                for (let i = 0; i < parts.length - 1; i++) {
-                                    path += '/' + parts[i];
-                                    try {
-                                        Module.FS.mkdir(path);
-                                    } catch (e) {
-                                        // Directory already exists, ignore error
-                                    }
+                                const cleanPath = data.path.replaceAll('\\', '/');
+                                const pathsToWrite = [cleanPath];
+                                if (cleanPath.startsWith('gtavc-assets/')) {
+                                    pathsToWrite.push(cleanPath.replace('gtavc-assets/', 'vc-assets/'));
+                                } else if (cleanPath.startsWith('vc-assets/')) {
+                                    pathsToWrite.push(cleanPath.replace('vc-assets/', 'gtavc-assets/'));
                                 }
 
                                 let fileData = data.data;
                                 // Auto-tune gta_vc.dat if vanilla file has more than 16 streamed IPLs
-                                if (data.path.toLowerCase().endsWith('data/gta_vc.dat')) {
+                                if (cleanPath.toLowerCase().endsWith('data/gta_vc.dat')) {
                                     let content = textDecoder.decode(fileData);
                                     if (content.includes('IPL DATA\\MAPS\\airportN\\airportN.IPL') && !content.includes('# IPL DATA\\MAPS\\airportN')) {
                                         console.log('[game.js] Auto-tuning gta_vc.dat for 16-slot CIplStore pool limit');
@@ -153,18 +186,30 @@ async function loadGame() {
                                     }
                                 }
 
-                                Module.FS.createDataFile(data.path, 0, fileData, fileData.length);
+                                for (const p of pathsToWrite) {
+                                    const parts = p.split('/');
+                                    let curDir = '';
+                                    for (let i = 0; i < parts.length - 1; i++) {
+                                        curDir += '/' + parts[i];
+                                        try {
+                                            Module.FS.mkdir(curDir);
+                                        } catch (e) {}
+                                    }
+                                    try {
+                                        Module.FS.createDataFile(p, 0, fileData, fileData.length);
+                                    } catch (err) {}
+                                }
 
                                 // Mirror key DAT files to asset root if loaded from data/
-                                const lowerPath = data.path.toLowerCase();
+                                const lowerPath = cleanPath.toLowerCase();
                                 const mirrorNames = ['carcols.dat', 'pedstats.dat', 'timecyc.dat', 'surface.dat', 'waterpro.dat'];
                                 for (const mName of mirrorNames) {
                                     if (lowerPath.endsWith('data/' + mName)) {
-                                        const rootPath = data.path.substring(0, lowerPath.lastIndexOf('data/')) + mName;
-                                        try {
-                                            Module.FS.createDataFile(rootPath, 0, fileData, fileData.length);
-                                        } catch (err) {
-                                            // ignore if exists
+                                        for (const p of pathsToWrite) {
+                                            const rootPath = p.substring(0, p.toLowerCase().lastIndexOf('data/')) + mName;
+                                            try {
+                                                Module.FS.createDataFile(rootPath, 0, fileData, fileData.length);
+                                            } catch (err) {}
                                         }
                                     }
                                 }
@@ -239,17 +284,47 @@ async function loadGame() {
         }),
         mainCalled: async () => {
             try {
-                Module.FS.mkdir("/vc-assets");
-                Module.FS.mkdir("/vc-assets/local");
+                // Initialize required directory trees in VFS
+                const dirs = [
+                    '/' + ASSET_PREFIX + '/models/gta3.img',
+                    '/' + ASSET_PREFIX + '/models/coll',
+                    '/' + ASSET_PREFIX + '/models/generic',
+                    '/' + ASSET_PREFIX + '/anim',
+                    '/' + ASSET_PREFIX + '/anim/cuts.img',
+                    '/' + ASSET_PREFIX + '/audio',
+                    '/' + ASSET_PREFIX + '/data',
+                    '/' + ASSET_PREFIX + '/text',
+                    '/' + ASSET_PREFIX + '/txd',
+                    '/vc-assets/local/models/gta3.img',
+                    '/vc-assets/local/models/coll',
+                    '/vc-assets/local/models/generic',
+                    '/vc-assets/local/anim',
+                    '/vc-assets/local/anim/cuts.img',
+                    '/vc-assets/local/audio',
+                    '/vc-assets/local/data',
+                    '/vc-assets/local/text',
+                    '/vc-assets/local/txd'
+                ];
+                for (const d of dirs) {
+                    try {
+                        Module.FS.mkdirTree(d);
+                    } catch (e) {}
+                }
 
                 await Module.initFS();
 
                 try {
                     Module.FS.unlink("/vc-assets/local/revc.ini");
-                } catch (e) {
-                    // ignore
-                }
+                } catch (e) {}
+                try {
+                    Module.FS.unlink("/" + ASSET_PREFIX + "/revc.ini");
+                } catch (e) {}
+
                 Module.FS.createDataFile("/vc-assets/local/revc.ini", 0, revc_ini, revc_ini.length);
+                try {
+                    Module.FS.createDataFile("/" + ASSET_PREFIX + "/revc.ini", 0, revc_ini, revc_ini.length);
+                } catch (e) {}
+
                 Module['_async_main']();
             } catch (e) {
                 console.error('mainCalled error:', e);

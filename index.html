@@ -440,7 +440,7 @@
                     Compatible with your original Vice City game data.
                 </p>
 
-                <div id="dropzone" class="dropzone" onclick="document.getElementById('folderInput').click()">
+                <div id="dropzone" class="dropzone" style="display:none;" onclick="document.getElementById('folderInput').click()">
                     <span class="dropzone-icon">📂</span>
                     <span id="dropzoneLabel" class="dropzone-text">Click or Drop your 'vc-assets' folder here</span>
                     <span class="dropzone-hint">Select the extracted <code>vc-assets</code> folder containing <code>local</code></span>
@@ -468,7 +468,10 @@
                     </div>
                 </div>
 
-                <button id="playBtn" class="btn-launch-game" disabled onclick="startPlay()">Select Assets First</button>
+                <button id="playBtn" class="btn-launch-game" onclick="startPlay()">▶ PLAY VICE CITY</button>
+                <div style="text-align: center; margin-top: 10px;">
+                    <a href="javascript:void(0)" onclick="document.getElementById('dropzone').style.display = document.getElementById('dropzone').style.display === 'none' ? 'block' : 'none';" style="font-size:0.75rem; color:#a78bfa; text-decoration:underline;">Advanced: Use custom local asset folder</a>
+                </div>
 
                 <div style="font-size:0.75rem; color:#64748b; line-height:1.4;">
                     <strong>Legal & Attribution Notice:</strong><br>
@@ -559,19 +562,45 @@
             } catch (e) {}
         }
 
+        const ASSET_PREFIX = 'gtavc-assets/local';
+        const ASSET_BASE = new URL(`${ASSET_PREFIX}/`, window.location.href).href;
+
+        function normalizeAssetRel(rel) {
+            if (!rel) return '';
+            let p = rel.replaceAll('\\', '/').replaceAll('//', '/');
+            if (p.startsWith('/')) p = p.substring(1);
+            if (p.toLowerCase().startsWith('gtavc-assets/local/')) {
+                p = p.substring('gtavc-assets/local/'.length);
+            } else if (p.toLowerCase().startsWith('vc-assets/local/')) {
+                p = p.substring('vc-assets/local/'.length);
+            }
+            return p;
+        }
+
+        function assetCandidates(rel) {
+            const r = normalizeAssetRel(rel);
+            const out = [r];
+            
+            // Fallback: loose files extracted from gta3.img
+            let m = r.match(/^models\/([^/]+\.(dff|txd|col|ifp))$/i);
+            if (m) out.push(`models/gta3.img/${m[1].toLowerCase()}`);
+
+            m = r.match(/^models\/([^/]+)\/([^/]+\.(dff|txd|col|ifp))$/i);
+            if (m && m[1].toLowerCase() !== 'gta3.img' && m[1].toLowerCase() !== 'coll' && m[1].toLowerCase() !== 'generic') {
+                out.push(`models/gta3.img/${m[2].toLowerCase()}`);
+            }
+
+            if (r.endsWith('cuts.img')) {
+                out.push('anim/cuts.img');
+            }
+            return out;
+        }
+
         let filesMap = new Map();
-        let serverHasAssets = false;
+        let serverHasAssets = true;
 
         function normalizeKey(path) {
-            let p = path.replace(/\\/g, '/');
-            const idx = p.toLowerCase().indexOf('vc-assets/');
-            if (idx !== -1) {
-                return p.substring(idx).toLowerCase();
-            }
-            if (p.toLowerCase().startsWith('local/')) {
-                return ('vc-assets/' + p).toLowerCase();
-            }
-            return p.toLowerCase();
+            return normalizeAssetRel(path).toLowerCase();
         }
 
         async function readFileAsync(file) {
@@ -583,32 +612,30 @@
             });
         }
 
-        // Auto-detect local HTTP server
+        // Auto-detect self-hosted assets
         async function checkServerAssets() {
             try {
-                const res = await fetch('vc-assets/local/revc.ini', { method: 'HEAD' });
+                const res = await fetch('gtavc-assets/local/data/gta_vc.dat', { method: 'HEAD' });
                 if (res.ok) {
                     serverHasAssets = true;
                     const badge = document.getElementById('assetStatus');
-                    badge.textContent = '● Local Server Ready';
+                    badge.textContent = '● Self-Hosted Assets Online';
                     badge.style.borderColor = '#10b981';
                     badge.style.color = '#6ee7b7';
                     badge.style.background = 'rgba(16, 185, 129, 0.2)';
 
-                    document.getElementById('dropzoneLabel').textContent = 'Local Server Assets Ready!';
                     const playBtn = document.getElementById('playBtn');
                     playBtn.disabled = false;
-                    playBtn.textContent = 'START PLAY (Local Server)';
+                    playBtn.textContent = '▶ PLAY VICE CITY';
                     return true;
                 }
             } catch (e) {}
-            document.getElementById('assetStatus').textContent = 'Select Assets Folder';
             return false;
         }
 
         checkServerAssets();
 
-        // Handle folder input
+        // Optional folder input
         document.getElementById('folderInput').addEventListener('change', function(event) {
             handleSelectedFiles(Array.from(event.target.files));
         });
@@ -620,14 +647,14 @@
                 filesMap.set(normalizeKey(f.webkitRelativePath), f);
             }
             const count = filesMap.size;
-            document.getElementById('assetStatus').textContent = `● ${count} Files Loaded`;
+            document.getElementById('assetStatus').textContent = `● ${count} Custom Files Loaded`;
             document.getElementById('assetStatus').style.borderColor = '#10b981';
             document.getElementById('assetStatus').style.color = '#6ee7b7';
 
-            document.getElementById('dropzoneLabel').textContent = `${count} files loaded successfully!`;
+            document.getElementById('dropzoneLabel').textContent = `${count} custom files loaded!`;
             const playBtn = document.getElementById('playBtn');
             playBtn.disabled = false;
-            playBtn.textContent = 'START PLAY';
+            playBtn.textContent = '▶ PLAY WITH CUSTOM ASSETS';
         }
 
         // Drag and drop support
@@ -668,32 +695,44 @@
         }
 
         async function getAssetBuffer(path) {
-            const key = normalizeKey(path);
-            if (filesMap.has(key)) {
-                const buf = await readFileAsync(filesMap.get(key));
-                if (document.getElementById('idbCacheToggle').checked) {
-                    putCachedFile(key, buf);
+            const candidates = assetCandidates(path);
+
+            // 1. Check custom uploaded files
+            for (const cand of candidates) {
+                const k = cand.toLowerCase();
+                if (filesMap.has(k)) {
+                    const buf = await readFileAsync(filesMap.get(k));
+                    if (document.getElementById('idbCacheToggle').checked) {
+                        putCachedFile(k, buf);
+                    }
+                    return buf;
                 }
-                return buf;
             }
-            // Check IndexedDB
-            const cached = await getCachedFile(key);
-            if (cached) {
-                return cached;
+
+            // 2. Check IndexedDB Cache
+            for (const cand of candidates) {
+                const k = cand.toLowerCase();
+                const cached = await getCachedFile(k);
+                if (cached) {
+                    return cached;
+                }
             }
-            // Check Server
-            if (serverHasAssets) {
+
+            // 3. Direct HTTP fetch from self-hosted gtavc-assets/local/
+            for (const cand of candidates) {
                 try {
-                    const res = await fetch(key);
+                    const url = new URL(`${ASSET_PREFIX}/${cand}`, window.location.href).href;
+                    const res = await fetch(url);
                     if (res.ok) {
                         const buf = await res.arrayBuffer();
                         if (document.getElementById('idbCacheToggle').checked) {
-                            putCachedFile(key, buf);
+                            putCachedFile(cand.toLowerCase(), buf);
                         }
                         return buf;
                     }
                 } catch (e) {}
             }
+
             return null;
         }
 
@@ -706,7 +745,7 @@
             // Notify iframe to start
             iframe.contentWindow.postMessage({ event: 'host.start' }, '*');
 
-            // Hide launcher modal after short delay or on first frame
+            // Hide launcher modal after short delay
             setTimeout(() => {
                 document.getElementById('launcherModal').classList.add('hidden');
                 document.getElementById('fullscreenBtn').style.display = 'inline-flex';
@@ -726,17 +765,12 @@
             }
 
             if (data.event === 'module.initfs') {
-                const preloadText = await (await fetch("preload_files.list")).text();
+                const preloadText = await (await fetch("preload_files.list?v=" + Date.now())).text();
                 const rawLines = preloadText.split('\n')
-                    .map(l => l.trim().toLowerCase())
+                    .map(l => l.trim())
                     .filter(l => l.length > 0 && !l.startsWith('#') && !l.includes('/skins') && !l.endsWith('.asi') && !l.endsWith('fonts.dat') && l.split('/').pop().includes('.'));
 
-                if (filesMap.size > 0) {
-                    initialFiles = Array.from(new Set(rawLines.filter(l => filesMap.has(normalizeKey(l)))));
-                } else {
-                    initialFiles = Array.from(new Set(rawLines));
-                }
-
+                initialFiles = Array.from(new Set(rawLines));
                 currentFile = -1;
                 event.source.postMessage({ event: '>module.initfs', files: initialFiles.length }, '*');
             } else if (data.event === 'module.initfile') {
@@ -781,6 +815,9 @@
                 }
             }
         });
+                }
+            }
+        });
 
         function toggleControlsModal() {
             const modal = document.getElementById('controlsModal');
@@ -798,3 +835,4 @@
     </script>
 </body>
 </html>
+

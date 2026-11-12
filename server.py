@@ -8,6 +8,7 @@ import http.server
 import socketserver
 import os
 import sys
+import io
 
 DEFAULT_PORT = 8080
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +30,38 @@ class ViceCityHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.end_headers()
+
+    def send_head(self):
+        path = self.translate_path(self.path)
+        if not os.path.exists(path) or os.path.isdir(path) or 'Range' not in self.headers:
+            return super().send_head()
+
+        range_header = self.headers.get('Range').strip()
+        if not range_header.startswith('bytes='):
+            return super().send_head()
+
+        total_length = os.path.getsize(path)
+        try:
+            range_val = range_header[6:].split('-')
+            start = int(range_val[0]) if range_val[0] else 0
+            end = int(range_val[1]) if range_val[1] else total_length - 1
+            if start >= total_length or end >= total_length or start > end:
+                self.send_error(416, "Requested Range Not Satisfiable")
+                return None
+
+            content_length = end - start + 1
+            self.send_response(206)
+            self.send_header('Content-Type', self.guess_type(path))
+            self.send_header('Content-Range', f'bytes {start}-{end}/{total_length}')
+            self.send_header('Content-Length', str(content_length))
+            self.send_header('Accept-Ranges', 'bytes')
+            self.end_headers()
+
+            f = open(path, 'rb')
+            f.seek(start)
+            return io.BytesIO(f.read(content_length))
+        except Exception:
+            return super().send_head()
 
     def guess_type(self, path):
         ext = os.path.splitext(path)[1].lower()

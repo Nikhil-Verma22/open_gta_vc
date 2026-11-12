@@ -155,6 +155,22 @@ async function loadGame() {
         initFS: async () => {
             await new Promise((resolve, reject) => {
                 let files = 0;
+                const createdDirs = new Set(['/', '/gtavc-assets', '/gtavc-assets/local', '/vc-assets', '/vc-assets/local']);
+
+                function ensureDir(p) {
+                    const parts = p.split('/').filter(Boolean);
+                    let cur = '';
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        cur += '/' + parts[i];
+                        if (!createdDirs.has(cur)) {
+                            try {
+                                Module.FS.mkdir(cur);
+                            } catch (e) {}
+                            createdDirs.add(cur);
+                        }
+                    }
+                }
+
                 window.addEventListener('message', (event) => {
                     const data = event.data;
                     if (data.event === '>module.initfs') {
@@ -203,14 +219,7 @@ async function loadGame() {
                                 }
 
                                 for (const p of pathsToWrite) {
-                                    const parts = p.split('/');
-                                    let curDir = '';
-                                    for (let i = 0; i < parts.length - 1; i++) {
-                                        curDir += '/' + parts[i];
-                                        try {
-                                            Module.FS.mkdir(curDir);
-                                        } catch (e) {}
-                                    }
+                                    ensureDir(p);
                                     try {
                                         Module.FS.createDataFile(p, 0, fileData, fileData.length);
                                     } catch (err) {}
@@ -223,6 +232,7 @@ async function loadGame() {
                                     if (lowerPath.endsWith('data/' + mName)) {
                                         for (const p of pathsToWrite) {
                                             const rootPath = p.substring(0, p.toLowerCase().lastIndexOf('data/')) + mName;
+                                            ensureDir(rootPath);
                                             try {
                                                 Module.FS.createDataFile(rootPath, 0, fileData, fileData.length);
                                             } catch (err) {}
@@ -240,6 +250,9 @@ async function loadGame() {
                                 event: 'module.initfile',
                             }, '*');
                         } else {
+                            window.top.postMessage({
+                                event: 'preload.complete',
+                            }, '*');
                             resolve();
                         }
                     }
@@ -329,6 +342,13 @@ async function loadGame() {
 
                 await Module.initFS();
 
+                // Signal preload complete to host window
+                if (window.top !== window) {
+                    window.top.postMessage({ event: 'preload.complete' }, '*');
+                }
+
+                const currentIni = getRevcIni();
+
                 try {
                     Module.FS.unlink("/vc-assets/local/revc.ini");
                 } catch (e) {}
@@ -336,9 +356,9 @@ async function loadGame() {
                     Module.FS.unlink("/" + ASSET_PREFIX + "/revc.ini");
                 } catch (e) {}
 
-                Module.FS.createDataFile("/vc-assets/local/revc.ini", 0, revc_ini, revc_ini.length);
+                Module.FS.createDataFile("/vc-assets/local/revc.ini", 0, currentIni, currentIni.length);
                 try {
-                    Module.FS.createDataFile("/" + ASSET_PREFIX + "/revc.ini", 0, revc_ini, revc_ini.length);
+                    Module.FS.createDataFile("/" + ASSET_PREFIX + "/revc.ini", 0, currentIni, currentIni.length);
                 } catch (e) {}
 
                 Module['_async_main']();
@@ -759,16 +779,20 @@ UNKNOWN_ACTION=
 
 `;
 
-const revc_ini = (() => {
+function getRevcIni() {
+    const curW = Math.max(window.innerWidth || window.screen.width || 1280, 800);
+    const curH = Math.max(window.innerHeight || window.screen.height || 720, 600);
     let ini = localStorage.getItem('vcsky.revc.ini');
     if (ini) {
         // Enforce Auto Aspect Ratio (AspectRatio=2) to prevent wide/fat stretching
         ini = ini.replace(/AspectRatio=\d+/g, 'AspectRatio=2');
-        if (ini.includes('Width=800') && ini.includes('Height=600')) {
-            ini = ini.replace('Width=800', `Width=${screenW}`).replace('Height=600', `Height=${screenH}`);
-        }
+        // Update Width and Height to match current screen resolution
+        ini = ini.replace(/Width=\d+/g, `Width=${curW}`);
+        ini = ini.replace(/Height=\d+/g, `Height=${curH}`);
         localStorage.setItem('vcsky.revc.ini', ini);
         return ini;
     }
-    return revc_iniDefault;
-})();
+    return revc_iniDefault.replace(/Width=\d+/, `Width=${curW}`).replace(/Height=\d+/, `Height=${curH}`);
+}
+
+const revc_ini = getRevcIni();

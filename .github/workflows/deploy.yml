@@ -1,0 +1,123 @@
+name: Deploy GTA Vice City to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate & Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Required WebAssembly & Engine Files
+        run: |
+          echo "=== Verifying Required Files ==="
+          REQUIRED_FILES=(
+            "index.html"
+            "engine.html"
+            "game.js"
+            "index.js"
+            "index.wasm"
+            "preload_files.list"
+            "GamepadEmulator.js"
+            "idbfs.js"
+            "jsdos-cloud-sdk.js"
+          )
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Required file missing: $file"
+              exit 1
+            fi
+            echo " [OK] $file found ($(stat -c%s "$file") bytes)"
+          done
+
+      - name: Validate WebAssembly Binary
+        run: |
+          echo "=== Validating WebAssembly Binary ==="
+          WASM_SIZE=$(stat -c%s "index.wasm")
+          echo "index.wasm size: $WASM_SIZE bytes"
+          if [ "$WASM_SIZE" -lt 5000000 ]; then
+            echo "::error::index.wasm appears truncated or incomplete (< 5 MB)"
+            exit 1
+          fi
+          # Check WebAssembly magic header (\0asm)
+          python3 -c "with open('index.wasm', 'rb') as f: magic = f.read(4); assert magic == b'\x00asm', f'Invalid magic header: {magic}'"
+          echo " [OK] Valid WebAssembly magic header verified (\\0asm)"
+
+      - name: Verify No Copyrighted Assets in Git
+        run: |
+          echo "=== Checking for Unintended Copyrighted Game Data ==="
+          ILLEGAL_FILES=$(find . -type f \( -name "*.img" -o -name "*.adf" -o -name "*.raw" -o -name "*.wav" \) -not -path "*/.*")
+          if [ -n "$ILLEGAL_FILES" ]; then
+            echo "::error::Found copyrighted binary game files that should not be in repository: $ILLEGAL_FILES"
+            exit 1
+          fi
+          echo " [OK] No prohibited game binaries or raw archives found in repository."
+
+      - name: Scan for Accidental Secrets
+        run: |
+          echo "=== Scanning for Secrets and Tokens ==="
+          # Check for gh tokens, api keys, or sensitive patterns
+          if grep -rnEi "(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{82}|PRIVATE KEY)" --exclude-dir=".git" .; then
+            echo "::error::Potential secret or token detected in repository files!"
+            exit 1
+          fi
+          if [ -f ".env" ]; then
+            echo "::error::.env file detected!"
+            exit 1
+          fi
+          echo " [OK] No secrets or credentials found."
+
+      - name: Validate Total Published Site Size
+        run: |
+          echo "=== Checking Total Published Site Size ==="
+          TOTAL_BYTES=$(du -sb --exclude=".git" . | awk '{print $1}')
+          TOTAL_MB=$((TOTAL_BYTES / 1048576))
+          echo "Total static site size: ${TOTAL_MB} MB (${TOTAL_BYTES} bytes)"
+          # GitHub Pages max limit is 1 GB (1024 MB)
+          if [ "$TOTAL_MB" -gt 1000 ]; then
+            echo "::error::Repository size exceeds GitHub Pages 1GB limit!"
+            exit 1
+          fi
+          echo " [OK] Total site size (${TOTAL_MB} MB) is well under GitHub Pages 1GB limit."
+
+  deploy:
+    name: Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload entire repository excluding .git and temporary files
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

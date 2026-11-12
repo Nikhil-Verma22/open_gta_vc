@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Grand Theft Auto: Vice City (revcDOS Browser Port)</title>
+    <meta name="description" content="Play GTA Vice City directly in your browser using WebAssembly. Open-source browser port by the DOS.Zone Team.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌴</text></svg>">
+    <style>
+        :root {
+            --neon-pink: #ff4193;
+            --neon-cyan: #249ef5;
+            --neon-yellow: #fde047;
+            --bg-dark: #0a051d;
+            --panel-bg: rgba(18, 9, 44, 0.95);
+            --border-glow: 0 0 15px rgba(255, 65, 147, 0.4);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #d8c8ff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(255, 65, 147, 0.15), transparent 60%),
+                radial-gradient(circle at 100% 100%, rgba(36, 158, 245, 0.1), transparent 50%),
+                linear-gradient(to bottom, #10072d 0%, #080318 100%);
+        }
+
+        header {
+            width: 100%;
+            padding: 12px 24px;
+            background: var(--panel-bg);
+            border-bottom: 2px solid var(--neon-pink);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 25px rgba(255, 65, 147, 0.25);
+            z-index: 100;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .palm-icon {
+            font-size: 1.8rem;
+            filter: drop-shadow(0 0 8px var(--neon-pink));
+        }
+
+        .title-block {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-title {
+            font-size: 1.4rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, var(--neon-pink), var(--neon-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255, 65, 147, 0.3);
+        }
+
+        .port-subtitle {
+            font-size: 0.72rem;
+            color: #a78bfa;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .port-subtitle a {
+            color: #38bdf8;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .port-subtitle a:hover {
+            text-decoration: underline;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: rgba(36, 158, 245, 0.15);
+            border: 1px solid var(--neon-cyan);
+            color: #7dd3fc;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--neon-pink), #a21caf);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 0.88rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 12px rgba(255, 65, 147, 0.4);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 18px rgba(255, 65, 147, 0.7);
+        }
+
+        .btn-secondary {
+            background: rgba(36, 158, 245, 0.15);
+            border: 1px solid var(--neon-cyan);
+            color: #93c5fd;
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(36, 158, 245, 0.3);
+            box-shadow: 0 0 12px rgba(36, 158, 245, 0.4);
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: calc(100vh - 65px);
+            position: relative;
+        }
+
+        #game-frame-container {
+            width: 100%;
+            height: 100%;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            position: relative;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #000;
+        }
+
+        /* Launcher Landing Card (shown before or above game) */
+        .launcher-modal {
+            position: absolute;
+            inset: 0;
+            background: rgba(8, 4, 22, 0.94);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            padding: 20px;
+            overflow-y: auto;
+            transition: opacity 0.3s ease;
+        }
+
+        .launcher-modal.hidden {
+            display: none;
+        }
+
+        .launcher-card {
+            background: var(--panel-bg);
+            border: 2px solid var(--neon-pink);
+            border-radius: 16px;
+            max-width: 680px;
+            width: 100%;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), var(--border-glow);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .neon-heading {
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 0 12px var(--neon-pink), 0 0 24px var(--neon-pink);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .launcher-desc {
+            font-size: 0.95rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+
+        .dropzone {
+            border: 2px dashed rgba(255, 65, 147, 0.6);
+            background: rgba(255, 65, 147, 0.05);
+            border-radius: 12px;
+            padding: 24px 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--neon-cyan);
+            background: rgba(36, 158, 245, 0.1);
+            transform: scale(1.01);
+        }
+
+        .dropzone-icon {
+            font-size: 2.4rem;
+        }
+
+        .dropzone-text {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #fff;
+        }
+
+        .dropzone-hint {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 600px) {
+            .options-grid { grid-template-columns: 1fr; }
+            .neon-heading { font-size: 1.6rem; }
+        }
+
+        .option-item {
+            background: rgba(255, 255, 255, 0.04);
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-launch-game {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            padding: 14px 28px;
+            font-size: 1.2rem;
+            font-weight: 800;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-launch-game:hover:not(:disabled) {
+            transform: scale(1.03);
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.8);
+        }
+
+        .btn-launch-game:disabled {
+            background: #334155;
+            color: #64748b;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Loading / Preload Overlay */
+        .progress-box {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 65, 147, 0.4);
+        }
+
+        .progress-bar-val {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+            transition: width 0.15s ease;
+            box-shadow: 0 0 10px var(--neon-pink);
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #a78bfa;
+        }
+
+        /* Controls Guide Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: var(--panel-bg);
+            border: 2px solid var(--neon-cyan);
+            border-radius: 12px;
+            max-width: 600px;
+            width: 100%;
+            padding: 24px;
+            box-shadow: 0 0 30px rgba(36, 158, 245, 0.4);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: var(--neon-cyan);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .controls-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+        }
+
+        .controls-table th, .controls-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .controls-table th { color: var(--neon-pink); }
+        .controls-table td:first-child { font-weight: 700; color: #fff; }
+
+        .attribution-footer {
+            padding: 10px 20px;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-align: center;
+            background: rgba(10, 5, 29, 0.95);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .attribution-footer a { color: #38bdf8; text-decoration: none; }
+        .attribution-footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand-container">
+            <span class="palm-icon">🌴</span>
+            <div class="title-block">
+                <span class="logo-title">GTA Vice City</span>
+                <span class="port-subtitle">HTML5 Port by <a href="https://dos.zone/revcdos" target="_blank" rel="noopener">DOS.Zone Team</a> &bull; WebAssembly Port</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <div id="assetStatus" class="status-badge">Checking assets...</div>
+            <button class="btn btn-secondary" onclick="toggleControlsModal()">🎮 Controls</button>
+            <button id="headerSelectBtn" class="btn" onclick="document.getElementById('folderInput').click()">📁 Select Assets</button>
+            <button id="fullscreenBtn" class="btn btn-secondary" onclick="toggleFullscreen()" style="display:none;">⛶ Fullscreen</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- The Game Frame (hosts the isolated Emscripten runtime) -->
+        <div id="game-frame-container">
+            <iframe id="gameFrame" src="engine.html" allow="autoplay; fullscreen; gamepad; pointer-lock"></iframe>
+        </div>
+
+        <!-- Launcher UI overlay -->
+        <div id="launcherModal" class="launcher-modal">
+            <div class="launcher-card">
+                <h1 class="neon-heading">Grand Theft Auto: Vice City</h1>
+                <p class="launcher-desc">
+                    Experience the complete 1980s Miami adventure right in your browser via WebAssembly.<br>
+                    Compatible with your original Vice City game data.
+                </p>
+
+                <div id="dropzone" class="dropzone" onclick="document.getElementById('folderInput').click()">
+                    <span class="dropzone-icon">📂</span>
+                    <span id="dropzoneLabel" class="dropzone-text">Click or Drop your 'vc-assets' folder here</span>
+                    <span class="dropzone-hint">Select the extracted <code>vc-assets</code> folder containing <code>local</code></span>
+                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none;">
+                </div>
+
+                <div class="options-grid">
+                    <label class="option-item">
+                        <input type="checkbox" id="idbCacheToggle" checked>
+                        <span>Cache assets in IndexedDB (fast future play)</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" id="cloudSavesToggle" checked>
+                        <span>Cloud Saves (<a href="https://v8.js-dos.com/key" target="_blank" rel="noopener" style="color:#38bdf8;">js-dos key</a>)</span>
+                    </label>
+                </div>
+
+                <div id="progressBox" class="progress-box">
+                    <div class="progress-bar-bg">
+                        <div id="progressBar" class="progress-bar-val"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span id="progressStatus">Preloading game data...</span>
+                        <span id="progressPct">0%</span>
+                    </div>
+                </div>
+
+                <button id="playBtn" class="btn-launch-game" disabled onclick="startPlay()">Select Assets First</button>
+
+                <div style="font-size:0.75rem; color:#64748b; line-height:1.4;">
+                    <strong>Legal & Attribution Notice:</strong><br>
+                    This is an open-source WebAssembly implementation of reVC by the <a href="https://dos.zone/revcdos" target="_blank" rel="noopener" style="color:#38bdf8;">DOS.Zone Team</a>.<br>
+                    GTA Vice City is &copy; Rockstar Games / Take-Two Interactive. Game assets are loaded locally from your own device and are never uploaded to any server.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Controls Modal -->
+    <div id="controlsModal" class="modal-overlay" onclick="if(event.target===this) toggleControlsModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title">GTA Vice City Controls</span>
+                <button class="close-btn" onclick="toggleControlsModal()">&times;</button>
+            </div>
+            <table class="controls-table">
+                <thead>
+                    <tr><th>Action</th><th>Keyboard & Mouse</th><th>Gamepad / Touch</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Move / Steer</td><td>W, A, S, D / Arrow Keys</td><td>Left Thumbstick / Virtual D-Pad</td></tr>
+                    <tr><td>Look / Aim</td><td>Mouse</td><td>Right Thumbstick / Touch Area</td></tr>
+                    <tr><td>Sprint</td><td>Left Shift</td><td>A / Cross / Run Button</td></tr>
+                    <tr><td>Jump</td><td>Spacebar</td><td>X / Square / Jump Button</td></tr>
+                    <tr><td>Enter / Exit Vehicle</td><td>Enter / F</td><td>Y / Triangle / Car Button</td></tr>
+                    <tr><td>Attack / Fire</td><td>Left Click / Left Ctrl</td><td>Right Trigger / Fist Button</td></tr>
+                    <tr><td>Handbrake / Drift</td><td>Spacebar / Right Click</td><td>Right Bumper / Drift Button</td></tr>
+                    <tr><td>Change Radio Station</td><td>R / Insert</td><td>D-Pad Left/Right / Radio Button</td></tr>
+                    <tr><td>Horn / Siren</td><td>Left Shift</td><td>Left Thumbstick Click / Horn Button</td></tr>
+                    <tr><td>Change Camera</td><td>V / Home</td><td>Select / View / Camera Button</td></tr>
+                    <tr><td>Pause / Main Menu</td><td>Esc</td><td>Start / Menu Button</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <footer class="attribution-footer">
+        Grand Theft Auto: Vice City Browser Port &bull; Authored by the <a href="https://dos.zone/revcdos" target="_blank" rel="noopener">DOS.Zone Team</a> &bull; Destination: <a href="https://github.com/Nikhil-Verma22/open_gta_vc" target="_blank" rel="noopener">open_gta_vc</a>
+    </footer>
+
+    <script>
+        // IndexedDB Cache Setup for Option A
+        const DB_NAME = 'GTA_VC_ASSETS_CACHE';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'files';
+
+        function openCacheDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME);
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async function getCachedFile(key) {
+            try {
+                const db = await openCacheDB();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.get(key);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
+                });
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function putCachedFile(key, buffer) {
+            try {
+                const db = await openCacheDB();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    store.put(buffer, key);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                });
+            } catch (e) {}
+        }
+
+        let filesMap = new Map();
+        let serverHasAssets = false;
+
+        function normalizeKey(path) {
+            let p = path.replace(/\\/g, '/');
+            const idx = p.toLowerCase().indexOf('vc-assets/');
+            if (idx !== -1) {
+                return p.substring(idx).toLowerCase();
+            }
+            if (p.toLowerCase().startsWith('local/')) {
+                return ('vc-assets/' + p).toLowerCase();
+            }
+            return p.toLowerCase();
+        }
+
+        async function readFileAsync(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // Auto-detect local HTTP server
+        async function checkServerAssets() {
+            try {
+                const res = await fetch('vc-assets/local/revc.ini', { method: 'HEAD' });
+                if (res.ok) {
+                    serverHasAssets = true;
+                    const badge = document.getElementById('assetStatus');
+                    badge.textContent = '● Local Server Ready';
+                    badge.style.borderColor = '#10b981';
+                    badge.style.color = '#6ee7b7';
+                    badge.style.background = 'rgba(16, 185, 129, 0.2)';
+
+                    document.getElementById('dropzoneLabel').textContent = 'Local Server Assets Ready!';
+                    const playBtn = document.getElementById('playBtn');
+                    playBtn.disabled = false;
+                    playBtn.textContent = 'START PLAY (Local Server)';
+                    return true;
+                }
+            } catch (e) {}
+            document.getElementById('assetStatus').textContent = 'Select Assets Folder';
+            return false;
+        }
+
+        checkServerAssets();
+
+        // Handle folder input
+        document.getElementById('folderInput').addEventListener('change', function(event) {
+            handleSelectedFiles(Array.from(event.target.files));
+        });
+
+        function handleSelectedFiles(files) {
+            if (!files || files.length === 0) return;
+            filesMap.clear();
+            for (const f of files) {
+                filesMap.set(normalizeKey(f.webkitRelativePath), f);
+            }
+            const count = filesMap.size;
+            document.getElementById('assetStatus').textContent = `● ${count} Files Loaded`;
+            document.getElementById('assetStatus').style.borderColor = '#10b981';
+            document.getElementById('assetStatus').style.color = '#6ee7b7';
+
+            document.getElementById('dropzoneLabel').textContent = `${count} files loaded successfully!`;
+            const playBtn = document.getElementById('playBtn');
+            playBtn.disabled = false;
+            playBtn.textContent = 'START PLAY';
+        }
+
+        // Drag and drop support
+        const dropzone = document.getElementById('dropzone');
+        ['dragenter', 'dragover'].forEach(name => {
+            dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        });
+        ['dragleave', 'drop'].forEach(name => {
+            dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+        });
+        dropzone.addEventListener('drop', async (e) => {
+            const items = e.dataTransfer.items;
+            if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+                const entry = items[0].webkitGetAsEntry();
+                if (entry.isDirectory) {
+                    const files = [];
+                    await readDirectoryRecursive(entry, '', files);
+                    handleSelectedFiles(files);
+                }
+            }
+        });
+
+        async function readDirectoryRecursive(dirEntry, currentPath, resultList) {
+            const dirReader = dirEntry.createReader();
+            const entries = await new Promise((resolve) => dirReader.readEntries(resolve));
+            for (const ent of entries) {
+                if (ent.isFile) {
+                    const file = await new Promise((resolve) => ent.file(resolve));
+                    Object.defineProperty(file, 'webkitRelativePath', {
+                        value: (currentPath ? currentPath + '/' : '') + ent.name,
+                        writable: false
+                    });
+                    resultList.push(file);
+                } else if (ent.isDirectory) {
+                    await readDirectoryRecursive(ent, (currentPath ? currentPath + '/' : '') + ent.name, resultList);
+                }
+            }
+        }
+
+        async function getAssetBuffer(path) {
+            const key = normalizeKey(path);
+            if (filesMap.has(key)) {
+                const buf = await readFileAsync(filesMap.get(key));
+                if (document.getElementById('idbCacheToggle').checked) {
+                    putCachedFile(key, buf);
+                }
+                return buf;
+            }
+            // Check IndexedDB
+            const cached = await getCachedFile(key);
+            if (cached) {
+                return cached;
+            }
+            // Check Server
+            if (serverHasAssets) {
+                try {
+                    const res = await fetch(key);
+                    if (res.ok) {
+                        const buf = await res.arrayBuffer();
+                        if (document.getElementById('idbCacheToggle').checked) {
+                            putCachedFile(key, buf);
+                        }
+                        return buf;
+                    }
+                } catch (e) {}
+            }
+            return null;
+        }
+
+        function startPlay() {
+            document.getElementById('progressBox').style.display = 'flex';
+            document.getElementById('playBtn').disabled = true;
+            document.getElementById('playBtn').textContent = 'Launching Engine...';
+
+            const iframe = document.getElementById('gameFrame');
+            // Notify iframe to start
+            iframe.contentWindow.postMessage({ event: 'host.start' }, '*');
+
+            // Hide launcher modal after short delay or on first frame
+            setTimeout(() => {
+                document.getElementById('launcherModal').classList.add('hidden');
+                document.getElementById('fullscreenBtn').style.display = 'inline-flex';
+            }, 800);
+        }
+
+        let initialFiles = [];
+        let currentFile = 0;
+
+        window.addEventListener('message', async (event) => {
+            const data = event.data;
+            if (!data || !data.event) return;
+
+            if (data.event === 'request-fullscreen') {
+                toggleFullscreen();
+                return;
+            }
+
+            if (data.event === 'module.initfs') {
+                const preloadText = await (await fetch("preload_files.list")).text();
+                const rawLines = preloadText.split('\n')
+                    .map(l => l.trim().toLowerCase())
+                    .filter(l => l.length > 0 && !l.startsWith('#') && !l.includes('/skins') && !l.endsWith('.asi') && !l.endsWith('fonts.dat') && l.split('/').pop().includes('.'));
+
+                if (filesMap.size > 0) {
+                    initialFiles = Array.from(new Set(rawLines.filter(l => filesMap.has(normalizeKey(l)))));
+                } else {
+                    initialFiles = Array.from(new Set(rawLines));
+                }
+
+                currentFile = -1;
+                event.source.postMessage({ event: '>module.initfs', files: initialFiles.length }, '*');
+            } else if (data.event === 'module.initfile') {
+                currentFile++;
+                const pct = Math.floor((currentFile / initialFiles.length) * 100);
+                document.getElementById('progressBar').style.width = pct + '%';
+                document.getElementById('progressPct').textContent = pct + '%';
+                document.getElementById('progressStatus').textContent = `Loading resources (${currentFile}/${initialFiles.length})...`;
+
+                if (currentFile < initialFiles.length) {
+                    const path = initialFiles[currentFile];
+                    const buffer = await getAssetBuffer(path);
+                    if (buffer) {
+                        event.source.postMessage({
+                            event: '>module.initfile',
+                            path,
+                            data: new Uint8Array(buffer),
+                        }, '*', [buffer]);
+                    } else {
+                        event.source.postMessage({
+                            event: '>module.initfile',
+                            path,
+                            data: new Uint8Array(0),
+                        }, '*');
+                    }
+                } else {
+                    document.getElementById('progressStatus').textContent = 'Starting Vice City...';
+                }
+            } else if (data.event === 'module.getasyncurl' && data.file) {
+                const buffer = await getAssetBuffer(data.file);
+                if (buffer) {
+                    event.source.postMessage({
+                        event: '>module.getasyncurl',
+                        file: data.file,
+                        data: new Uint8Array(buffer),
+                    }, '*', [buffer]);
+                } else {
+                    event.source.postMessage({
+                        event: '>module.getasyncurl',
+                        file: data.file,
+                    }, '*');
+                }
+            }
+        });
+
+        function toggleControlsModal() {
+            const modal = document.getElementById('controlsModal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function toggleFullscreen() {
+            const elem = document.getElementById('game-frame-container');
+            if (!document.fullscreenElement) {
+                elem.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+    </script>
+</body>
+</html>

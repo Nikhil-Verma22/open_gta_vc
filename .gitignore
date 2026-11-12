@@ -1,0 +1,21 @@
+# Game Assets & Archives (Never commit copyrighted game data)
+vc-assets/
+*.7z
+*.zip
+*.rar
+*.tar*
+*.iso
+*.bin
+*.cue
+*.torrent
+*.har
+
+# Local Development & Temporary Files
+chrome_profile/
+*.log
+__pycache__/
+*.pyc
+.env
+.env.*
+.DS_Store
+Thumbs.db

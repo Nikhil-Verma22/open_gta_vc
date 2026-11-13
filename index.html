@@ -1019,8 +1019,8 @@
                 }
             }
             sendStart();
-            // Retry sending host.start periodically until initfs arrives
-            startRetryTimer = setInterval(sendStart, 600);
+            // Retry sending host.start periodically only until engine acknowledges
+            startRetryTimer = setInterval(sendStart, 1200);
         }
 
         function exitToLauncher() {
@@ -1060,6 +1060,15 @@
         window.addEventListener('message', async (event) => {
             const data = event.data;
             if (!data || !data.event) return;
+
+            if (data.event === 'engine.ack_start') {
+                console.log('[index.html] Engine acknowledged start');
+                if (startRetryTimer) {
+                    clearInterval(startRetryTimer);
+                    startRetryTimer = null;
+                }
+                return;
+            }
 
             if (data.event === 'engine.ready') {
                 console.log('[index.html] Engine iframe ready');

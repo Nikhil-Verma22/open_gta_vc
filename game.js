@@ -84,7 +84,11 @@ const textDecoder = new TextDecoder();
 async function loadData() {
 };
 
+let isGameLoading = false;
+
 async function startGame(e) {
+    if (isGameLoading) return;
+    isGameLoading = true;
     if (e && e.stopPropagation) e.stopPropagation();
 
     const startContainer = document.querySelector('.start-container');
@@ -94,12 +98,23 @@ async function startGame(e) {
     const ctp = document.querySelector('.click-to-play');
     if (ctp) ctp.style.display = 'none';
 
+    // Acknowledge start to host window so it stops retrying host.start
+    if (window.top !== window) {
+        window.top.postMessage({ event: 'engine.ack_start' }, '*');
+    }
+
     loadGame();
 }
 
 // Listen for start signal from parent host window (index.html)
 window.addEventListener('message', (event) => {
     if (event.data && event.data.event === 'host.start') {
+        if (isGameLoading) {
+            if (window.top !== window) {
+                window.top.postMessage({ event: 'engine.ack_start' }, '*');
+            }
+            return;
+        }
         console.log('[game.js] Received host.start, starting game...');
         startGame(event);
     }
@@ -155,7 +170,7 @@ async function loadGame() {
         initFS: async () => {
             await new Promise((resolve, reject) => {
                 let files = 0;
-                const createdDirs = new Set(['/', '/gtavc-assets', '/gtavc-assets/local', '/vc-assets', '/vc-assets/local']);
+                const createdDirs = new Set(['/', '/gtavc-assets', '/gtavc-assets/local', '/vc-assets', '/vc-assets/local', '/models', '/data', '/anim', '/audio', '/text', '/txd', '/skins']);
 
                 function ensureDir(p) {
                     const parts = p.split('/').filter(Boolean);
@@ -181,12 +196,13 @@ async function loadGame() {
                         if (data.event === '>module.initfile') {
                             try {
                                 const cleanPath = data.path.replaceAll('\\', '/');
-                                const pathsToWrite = [cleanPath];
-                                if (cleanPath.startsWith('gtavc-assets/')) {
-                                    pathsToWrite.push(cleanPath.replace('gtavc-assets/', 'vc-assets/'));
-                                } else if (cleanPath.startsWith('vc-assets/')) {
-                                    pathsToWrite.push(cleanPath.replace('vc-assets/', 'gtavc-assets/'));
-                                }
+                                const rel = normalizeAssetRel(cleanPath);
+                                const pathsToWrite = Array.from(new Set([
+                                    cleanPath,
+                                    'gtavc-assets/local/' + rel,
+                                    'vc-assets/local/' + rel,
+                                    rel
+                                ]));
 
                                 let fileData = data.data;
                                 // Auto-tune gta_vc.dat if vanilla file has more than 16 streamed IPLs
@@ -287,7 +303,9 @@ async function loadGame() {
                 }
                 document.addEventListener("mousedown", lockMouseIfNeeded, { capture: true });
                 if (navigator.keyboard && navigator.keyboard.lock) {
-                    navigator.keyboard.lock(["Escape", "KeyW"]);
+                    try {
+                        navigator.keyboard.lock(["Escape", "KeyW"]).catch(() => {});
+                    } catch (e) {}
                 }
             }
         },
@@ -324,6 +342,7 @@ async function loadGame() {
                     '/' + ASSET_PREFIX + '/data',
                     '/' + ASSET_PREFIX + '/text',
                     '/' + ASSET_PREFIX + '/txd',
+                    '/' + ASSET_PREFIX + '/skins',
                     '/vc-assets/local/models/gta3.img',
                     '/vc-assets/local/models/coll',
                     '/vc-assets/local/models/generic',
@@ -332,7 +351,8 @@ async function loadGame() {
                     '/vc-assets/local/audio',
                     '/vc-assets/local/data',
                     '/vc-assets/local/text',
-                    '/vc-assets/local/txd'
+                    '/vc-assets/local/txd',
+                    '/vc-assets/local/skins'
                 ];
                 for (const d of dirs) {
                     try {
@@ -360,6 +380,12 @@ async function loadGame() {
                 try {
                     Module.FS.createDataFile("/" + ASSET_PREFIX + "/revc.ini", 0, currentIni, currentIni.length);
                 } catch (e) {}
+
+                try {
+                    Module.FS.chdir('/vc-assets/local');
+                } catch (e) {
+                    console.warn('[game.js] chdir to /vc-assets/local failed:', e);
+                }
 
                 Module['_async_main']();
 
@@ -451,8 +477,16 @@ async function loadGame() {
 
     document.body.classList.add('gameIsStarted');
 
-    const emulator = new GamepadEmulator();
-    const gamepad = emulator.AddEmulatedGamepad(null, true);
+    if (!window._gamepadEmulator) {
+        try {
+            window._gamepadEmulator = new GamepadEmulator();
+            window._gamepad = window._gamepadEmulator.AddEmulatedGamepad(null, true);
+        } catch (e) {
+            console.warn('[game.js] GamepadEmulator initialization error:', e);
+        }
+    }
+    const emulator = window._gamepadEmulator;
+    const gamepad = window._gamepad;
     const gamepadEmulatorConfig = {
         directions: { up: true, down: true, left: true, right: true },
         dragDistance: 100,
@@ -658,13 +692,10 @@ const portBy = document.getElementById('port-by');
 portBy.textContent = t('portBy');
 
 
-const screenW = Math.min(Math.max(window.innerWidth || 1280, 1024), 1920);
-const screenH = Math.min(Math.max(window.innerHeight || 720, 576), 1080);
-
 const revc_iniDefault = `
 [VideoMode]
-Width=${screenW}
-Height=${screenH}
+Width=800
+Height=600
 Depth=32
 Subsystem=0
 Windowed=0
@@ -780,19 +811,17 @@ UNKNOWN_ACTION=
 `;
 
 function getRevcIni() {
-    const curW = Math.max(window.innerWidth || window.screen.width || 1280, 800);
-    const curH = Math.max(window.innerHeight || window.screen.height || 720, 600);
     let ini = localStorage.getItem('vcsky.revc.ini');
     if (ini) {
         // Enforce Auto Aspect Ratio (AspectRatio=2) to prevent wide/fat stretching
         ini = ini.replace(/AspectRatio=\d+/g, 'AspectRatio=2');
-        // Update Width and Height to match current screen resolution
-        ini = ini.replace(/Width=\d+/g, `Width=${curW}`);
-        ini = ini.replace(/Height=\d+/g, `Height=${curH}`);
+        // Enforce safe 800x600 VideoMode so reVC doesn't crash on invalid mode index
+        ini = ini.replace(/Width=\d+/g, 'Width=800');
+        ini = ini.replace(/Height=\d+/g, 'Height=600');
         localStorage.setItem('vcsky.revc.ini', ini);
         return ini;
     }
-    return revc_iniDefault.replace(/Width=\d+/, `Width=${curW}`).replace(/Height=\d+/, `Height=${curH}`);
+    return revc_iniDefault;
 }
 
 const revc_ini = getRevcIni();

@@ -387,22 +387,22 @@ async function loadGame() {
                     console.warn('[game.js] chdir to /vc-assets/local failed:', e);
                 }
 
-                Module['_async_main']();
-
-                // Signal game.started once first frames begin rendering
-                let framesRendered = 0;
-                function notifyStartedOnRender() {
-                    framesRendered++;
-                    if (framesRendered >= 2) {
-                        console.log('[game.js] Engine rendering active, notifying host');
-                        if (window.top !== window) {
-                            window.top.postMessage({ event: 'game.started' }, '*');
-                        }
-                        return;
+                let gameStartedSent = false;
+                window._notifyGameStarted = function(reason) {
+                    if (gameStartedSent) return;
+                    gameStartedSent = true;
+                    console.log('[game.js] Game started (' + reason + '), notifying host');
+                    if (window.top !== window) {
+                        window.top.postMessage({ event: 'game.started' }, '*');
                     }
-                    requestAnimationFrame(notifyStartedOnRender);
-                }
-                requestAnimationFrame(notifyStartedOnRender);
+                };
+
+                // Fallback timer: notify host 4 seconds after mainCalled if not triggered by frontend log
+                setTimeout(() => {
+                    if (window._notifyGameStarted) window._notifyGameStarted('timer_fallback');
+                }, 4000);
+
+                Module['_async_main']();
             } catch (e) {
                 console.error('mainCalled error:', e);
             }
@@ -421,12 +421,15 @@ async function loadGame() {
         postRun: [
             () => {
                 console.log('[game.js] Module.postRun executed');
-                if (window.top !== window) {
-                    window.top.postMessage({ event: 'game.started' }, '*');
-                }
             }
         ],
-        print: (...args) => console.log(args.join(' ')),
+        print: (...args) => {
+            const line = args.join(' ');
+            console.log(line);
+            if (window._notifyGameStarted && (line.includes('LOAD frontend') || line.includes('Eaten sfx sound') || line.includes('frontend2'))) {
+                window._notifyGameStarted('frontend_loaded');
+            }
+        },
         printErr: (...args) => console.error(args.join(' ')),
         canvas: function () {
             const canvas = document.getElementById('canvas');
@@ -729,7 +732,7 @@ CarDensity=1.200000
 CutsceneBorders=1
 FreeCam=0
 [Graphics]
-AspectRatio=2
+AspectRatio=0
 VSync=1
 Trails=1
 FrameLimiter=0
@@ -813,8 +816,8 @@ UNKNOWN_ACTION=
 function getRevcIni() {
     let ini = localStorage.getItem('vcsky.revc.ini');
     if (ini) {
-        // Enforce Auto Aspect Ratio (AspectRatio=2) to prevent wide/fat stretching
-        ini = ini.replace(/AspectRatio=\d+/g, 'AspectRatio=2');
+        // Enforce safe 4:3 default AspectRatio (0) so 3D projection is not squashed vertically
+        ini = ini.replace(/AspectRatio=\d+/g, 'AspectRatio=0');
         // Enforce safe 800x600 VideoMode so reVC doesn't crash on invalid mode index
         ini = ini.replace(/Width=\d+/g, 'Width=800');
         ini = ini.replace(/Height=\d+/g, 'Height=600');

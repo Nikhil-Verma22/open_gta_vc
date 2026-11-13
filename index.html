@@ -154,94 +154,183 @@
         main {
             flex: 1;
             display: flex;
-            flex-direction: column;
-            width: 100%;
-            height: calc(100vh - 65px);
-            position: relative;
-        }
-
-        #game-frame-container {
-            width: 100%;
-            height: 100%;
-            flex: 1;
-            display: flex;
             justify-content: center;
             align-items: center;
-            background: #000;
+            width: 100%;
+            padding: 14px;
+            box-sizing: border-box;
             position: relative;
+            min-height: calc(100vh - 110px);
         }
 
-        iframe {
+        /* Resizable Game Window Mode */
+        .game-window {
+            width: 960px;
+            height: 600px;
+            min-width: 480px;
+            min-height: 320px;
+            max-width: 96vw;
+            max-height: calc(100vh - 100px);
+            background: #000;
+            border: 2px solid var(--neon-pink);
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.95), 0 0 25px rgba(255, 65, 147, 0.35);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            resize: both; /* Native hardware-accelerated resizable window */
+        }
+
+        .window-titlebar {
+            height: 36px;
+            background: linear-gradient(90deg, rgba(18, 9, 44, 0.98), rgba(28, 14, 68, 0.98));
+            border-bottom: 1px solid rgba(255, 65, 147, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            user-select: none;
+            flex-shrink: 0;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+
+        .window-titlebar .win-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 8px rgba(36, 158, 245, 0.5);
+        }
+
+        .window-titlebar .win-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .win-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #e2e8f0;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.74rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .win-btn:hover {
+            background: var(--neon-pink);
+            color: #fff;
+            border-color: var(--neon-pink);
+            box-shadow: 0 0 10px rgba(255, 65, 147, 0.6);
+        }
+
+        .window-body {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .window-body iframe {
             width: 100%;
             height: 100%;
             border: none;
-            background: #000;
             display: block;
+            background: #000;
         }
 
-        /* In-Game Full Viewport Mode */
-        body.in-game {
-            overflow: hidden !important;
+        /* Resizable Corner Visual Grip */
+        .game-window::after {
+            content: '';
+            position: absolute;
+            bottom: 3px;
+            right: 3px;
+            width: 12px;
+            height: 12px;
+            background: linear-gradient(135deg, transparent 50%, var(--neon-pink) 50%, var(--neon-pink) 65%, transparent 65%, transparent 80%, var(--neon-pink) 80%);
+            pointer-events: none;
+            z-index: 1000;
+            border-radius: 2px;
         }
 
-        body.in-game header,
-        body.in-game footer {
+        /* Fullscreen Mode (True Fullscreen via Fullscreen API or CSS Fullscreen) */
+        .game-window:fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            position: fixed !important;
+            inset: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            resize: none !important;
+            box-shadow: none !important;
+            z-index: 999999 !important;
+        }
+
+        .game-window.css-fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            position: fixed !important;
+            inset: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            resize: none !important;
+            box-shadow: none !important;
+            z-index: 999999 !important;
+        }
+
+        .game-window:fullscreen .window-titlebar,
+        .game-window.css-fullscreen .window-titlebar {
             display: none !important;
         }
 
-        body.in-game main {
-            position: fixed !important;
-            inset: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            z-index: 1000 !important;
-            margin: 0 !important;
-            padding: 0 !important;
+        .game-window:fullscreen::after,
+        .game-window.css-fullscreen::after {
+            display: none !important;
         }
 
-        body.in-game #game-frame-container {
-            width: 100vw !important;
-            height: 100vh !important;
-            position: fixed !important;
-            inset: 0 !important;
-            background: #000 !important;
-        }
-
-        /* Floating Quick Controls Bar in game */
-        .game-quick-bar {
-            position: fixed;
-            top: 12px;
+        .floating-exit-fs {
+            display: none;
+            position: absolute;
+            top: 16px;
             right: 16px;
-            z-index: 10002;
-            display: flex;
-            gap: 8px;
-            opacity: 0.35;
-            transition: opacity 0.25s ease;
-        }
-
-        .game-quick-bar:hover {
-            opacity: 1;
-        }
-
-        .quick-btn {
-            background: rgba(18, 9, 44, 0.85);
+            z-index: 1000000;
+            background: rgba(14, 7, 36, 0.85);
             border: 1px solid var(--neon-pink);
             color: #fff;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 0.78rem;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.82rem;
             font-weight: 700;
             cursor: pointer;
-            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6), 0 0 10px rgba(255, 65, 147, 0.4);
+            opacity: 0.6;
             transition: all 0.2s ease;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
         }
 
-        .quick-btn:hover {
+        .floating-exit-fs:hover {
+            opacity: 1;
+            transform: scale(1.05);
             background: var(--neon-pink);
-            color: #fff;
-            box-shadow: 0 0 12px var(--neon-pink);
-            transform: translateY(-1px);
+        }
+
+        .game-window:fullscreen .floating-exit-fs,
+        .game-window.css-fullscreen .floating-exit-fs {
+            display: block !important;
         }
 
         /* Launcher Landing Card (shown before or above game) */
@@ -465,42 +554,43 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* Bottom-Right Floating Loading Circle */
-        .bottom-right-loader {
+        /* Bottom-Left Floating Loading Circle */
+        .bottom-left-loader {
             position: fixed;
             bottom: 24px;
-            right: 24px;
+            left: 24px;
             z-index: 99999;
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 18px;
-            background: rgba(14, 8, 38, 0.94);
-            border: 2px solid var(--neon-pink);
+            padding: 8px 18px 8px 12px;
+            background: rgba(14, 7, 36, 0.95);
+            border: 2px solid var(--neon-cyan);
             border-radius: 40px;
-            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 65, 147, 0.5);
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.85), 0 0 20px rgba(36, 158, 245, 0.55);
             backdrop-filter: blur(12px);
             transition: opacity 0.4s ease, transform 0.4s ease;
             user-select: none;
             pointer-events: none;
         }
 
-        .bottom-right-loader.hidden {
+        .bottom-left-loader.hidden {
             opacity: 0;
             transform: translateY(20px) scale(0.9);
             pointer-events: none;
+            display: none !important;
         }
 
         .neon-spinner-circle {
-            width: 32px;
-            height: 32px;
+            width: 26px;
+            height: 26px;
             border: 3px solid rgba(255, 65, 147, 0.2);
             border-top: 3px solid var(--neon-cyan);
             border-right: 3px solid var(--neon-pink);
             border-radius: 50%;
             animation: neon-spin 0.75s linear infinite;
             flex-shrink: 0;
-            box-shadow: 0 0 12px rgba(36, 158, 245, 0.5);
+            box-shadow: 0 0 10px rgba(36, 158, 245, 0.5);
         }
 
         @keyframes neon-spin {
@@ -508,14 +598,14 @@
             100% { transform: rotate(360deg); }
         }
 
-        .bottom-right-text {
+        .bottom-left-text {
             display: flex;
             flex-direction: column;
             text-align: left;
         }
 
         .spinner-title {
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 800;
             color: #fff;
             text-transform: uppercase;
@@ -614,86 +704,92 @@
             <div id="assetStatus" class="status-badge ready">● Assets Ready</div>
             <button class="btn btn-secondary" onclick="toggleControlsModal()">🎮 Controls</button>
             <button id="headerSelectBtn" class="btn" onclick="document.getElementById('folderInput').click()">📁 Select Assets</button>
-            <button id="fullscreenBtn" class="btn btn-secondary" onclick="toggleFullscreen()" style="display:none;">⛶ Fullscreen</button>
+            <button id="fullscreenBtn" class="btn btn-secondary" onclick="toggleFullscreen()" style="display:inline-flex;">⛶ Fullscreen</button>
         </div>
     </header>
 
     <main>
-        <!-- Floating quick controls in-game -->
-        <div id="gameQuickBar" class="game-quick-bar" style="display:none;">
-            <button class="quick-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶ Fullscreen</button>
-            <button class="quick-btn" onclick="toggleControlsModal()" title="View Controls">🎮 Controls</button>
-            <button class="quick-btn" onclick="exitToLauncher()" title="Return to Launcher">✕ Launcher</button>
-        </div>
-
-        <!-- The Game Frame (hosts the isolated Emscripten runtime) -->
-        <div id="game-frame-container">
-            <iframe id="gameFrame" src="engine.html" allow="autoplay; fullscreen; gamepad; pointer-lock"></iframe>
-        </div>
-
-        <!-- Launcher UI overlay -->
-        <div id="launcherModal" class="launcher-modal">
-            <div class="launcher-card">
-                <h1 class="neon-heading">Grand Theft Auto: Vice City</h1>
-                <p class="launcher-desc">
-                    Experience the complete 1980s Miami adventure right in your browser via WebAssembly.<br>
-                    Zero configuration required — assets stream directly into the browser runtime.
-                </p>
-
-                <div id="dropzone" class="dropzone" style="display:none;" onclick="document.getElementById('folderInput').click()">
-                    <span class="dropzone-icon">📂</span>
-                    <span id="dropzoneLabel" class="dropzone-text">Click or Drop your 'vc-assets' folder here</span>
-                    <span class="dropzone-hint">Select the extracted <code>vc-assets</code> folder containing <code>local</code></span>
-                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none;">
+        <!-- The Game Window (hosts the isolated Emscripten runtime inside a resizable window) -->
+        <div id="gameWindow" class="game-window">
+            <div class="window-titlebar">
+                <div class="win-title">
+                    <span>🌴</span> Grand Theft Auto: Vice City
                 </div>
-
-                <div class="options-grid">
-                    <label class="option-item">
-                        <input type="checkbox" id="idbCacheToggle" checked>
-                        <span>Cache assets in IndexedDB (instant future play)</span>
-                    </label>
-                    <label class="option-item">
-                        <input type="checkbox" id="cloudSavesToggle" checked>
-                        <span>Cloud Saves (<a href="https://v8.js-dos.com/key" target="_blank" rel="noopener" style="color:#38bdf8;">js-dos key</a>)</span>
-                    </label>
+                <div class="win-controls">
+                    <button id="winFsBtn" class="win-btn" onclick="toggleFullscreen()" title="Fullscreen">⛶ Fullscreen</button>
+                    <button class="win-btn" onclick="location.reload()" title="Reload Game">↺ Reload</button>
                 </div>
+            </div>
 
-                <!-- Asset Loading Bar with Real-Time Metrics -->
-                <div id="progressBox" class="progress-box">
-                    <div class="progress-header">
-                        <span class="progress-title">🌴 Preloading Assets</span>
-                        <span id="progressPct" class="progress-pct-badge">0%</span>
+            <div id="game-frame-container" class="window-body">
+                <iframe id="gameFrame" src="engine.html" allow="autoplay; fullscreen; gamepad; pointer-lock"></iframe>
+                <button id="floatingExitFsBtn" class="floating-exit-fs" onclick="toggleFullscreen()" title="Exit Fullscreen">✕ Exit Fullscreen</button>
+
+                <!-- Launcher UI overlay -->
+                <div id="launcherModal" class="launcher-modal">
+                    <div class="launcher-card">
+                        <h1 class="neon-heading">Grand Theft Auto: Vice City</h1>
+                        <p class="launcher-desc">
+                            Experience the complete 1980s Miami adventure right in your browser via WebAssembly.<br>
+                            Zero configuration required — assets stream directly into the browser runtime.
+                        </p>
+
+                        <div id="dropzone" class="dropzone" style="display:none;" onclick="document.getElementById('folderInput').click()">
+                            <span class="dropzone-icon">📂</span>
+                            <span id="dropzoneLabel" class="dropzone-text">Click or Drop your 'vc-assets' folder here</span>
+                            <span class="dropzone-hint">Select the extracted <code>vc-assets</code> folder containing <code>local</code></span>
+                            <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none;">
+                        </div>
+
+                        <div class="options-grid">
+                            <label class="option-item">
+                                <input type="checkbox" id="idbCacheToggle" checked>
+                                <span>Cache assets in IndexedDB (instant future play)</span>
+                            </label>
+                            <label class="option-item">
+                                <input type="checkbox" id="cloudSavesToggle" checked>
+                                <span>Cloud Saves (<a href="https://v8.js-dos.com/key" target="_blank" rel="noopener" style="color:#38bdf8;">js-dos key</a>)</span>
+                            </label>
+                        </div>
+
+                        <!-- Asset Loading Bar with Real-Time Metrics -->
+                        <div id="progressBox" class="progress-box">
+                            <div class="progress-header">
+                                <span class="progress-title">🌴 Preloading Assets</span>
+                                <span id="progressPct" class="progress-pct-badge">0%</span>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div id="progressBar" class="progress-bar-val"></div>
+                            </div>
+                            <div class="progress-info">
+                                <span id="progressStatus">Initializing asset stream...</span>
+                                <span id="progressStats">0 / 0 files (0.0 MB)</span>
+                            </div>
+                            <div id="progressFile" class="progress-file">Preparing virtual filesystem...</div>
+                        </div>
+
+                        <button id="playBtn" class="btn-launch-game" onclick="startPlay()">▶ PLAY VICE CITY</button>
+                        <div style="text-align: center; margin-top: 10px;">
+                            <a href="javascript:void(0)" onclick="document.getElementById('dropzone').style.display = document.getElementById('dropzone').style.display === 'none' ? 'block' : 'none';" style="font-size:0.75rem; color:#a78bfa; text-decoration:underline;">Advanced: Use custom local asset folder</a>
+                        </div>
+
+                        <div style="font-size:0.75rem; color:#64748b; line-height:1.4;">
+                            <strong>Legal & Attribution Notice:</strong><br>
+                            This is an open-source WebAssembly implementation of reVC by the <a href="https://dos.zone/revcdos" target="_blank" rel="noopener" style="color:#38bdf8;">DOS.Zone Team</a>.<br>
+                            GTA Vice City is &copy; Rockstar Games / Take-Two Interactive. Game assets are loaded directly in your browser.
+                        </div>
                     </div>
-                    <div class="progress-bar-bg">
-                        <div id="progressBar" class="progress-bar-val"></div>
-                    </div>
-                    <div class="progress-info">
-                        <span id="progressStatus">Initializing asset stream...</span>
-                        <span id="progressStats">0 / 0 files (0.0 MB)</span>
-                    </div>
-                    <div id="progressFile" class="progress-file">Preparing virtual filesystem...</div>
-                </div>
-
-                <button id="playBtn" class="btn-launch-game" onclick="startPlay()">▶ PLAY VICE CITY</button>
-                <div style="text-align: center; margin-top: 10px;">
-                    <a href="javascript:void(0)" onclick="document.getElementById('dropzone').style.display = document.getElementById('dropzone').style.display === 'none' ? 'block' : 'none';" style="font-size:0.75rem; color:#a78bfa; text-decoration:underline;">Advanced: Use custom local asset folder</a>
-                </div>
-
-                <div style="font-size:0.75rem; color:#64748b; line-height:1.4;">
-                    <strong>Legal & Attribution Notice:</strong><br>
-                    This is an open-source WebAssembly implementation of reVC by the <a href="https://dos.zone/revcdos" target="_blank" rel="noopener" style="color:#38bdf8;">DOS.Zone Team</a>.<br>
-                    GTA Vice City is &copy; Rockstar Games / Take-Two Interactive. Game assets are loaded directly in your browser.
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Bottom-Right Animated Loading Circle -->
-    <div id="bottomRightSpinner" class="bottom-right-loader hidden">
+    <!-- Bottom-Left Animated Loading Circle -->
+    <div id="bottomLeftSpinner" class="bottom-left-loader hidden">
         <div class="neon-spinner-circle"></div>
-        <div class="bottom-right-text">
+        <div class="bottom-left-text">
             <div class="spinner-title">🌴 Vice City</div>
-            <div id="spinnerText" class="spinner-subtitle">Loading engine...</div>
+            <div id="spinnerText" class="spinner-subtitle">Loading assets...</div>
         </div>
     </div>
 
@@ -998,19 +1094,16 @@
             if (isGameStarted) return;
             isGameStarted = true;
 
-            // Switch to full in-game viewport layout
-            document.body.classList.add('in-game');
-            document.getElementById('gameQuickBar').style.display = 'flex';
-
             // Show asset loading bar in launcher card
             document.getElementById('progressBox').style.display = 'flex';
             document.getElementById('playBtn').disabled = true;
-            document.getElementById('playBtn').textContent = 'Launching Engine...';
+            document.getElementById('playBtn').textContent = 'Loading Assets...';
 
-            // Show bottom-right floating animated loading circle
-            const spinner = document.getElementById('bottomRightSpinner');
-            spinner.classList.remove('hidden');
-            document.getElementById('spinnerText').textContent = 'Loading game assets...';
+            // Show bottom-left animated loading circle
+            const spinner = document.getElementById('bottomLeftSpinner');
+            if (spinner) spinner.classList.remove('hidden');
+            const spinnerText = document.getElementById('spinnerText');
+            if (spinnerText) spinnerText.textContent = 'Streaming game assets...';
 
             const iframe = document.getElementById('gameFrame');
             function sendStart() {
@@ -1021,12 +1114,6 @@
             sendStart();
             // Retry sending host.start periodically only until engine acknowledges
             startRetryTimer = setInterval(sendStart, 1200);
-        }
-
-        function exitToLauncher() {
-            document.body.classList.remove('in-game');
-            document.getElementById('launcherModal').classList.remove('hidden');
-            document.getElementById('gameQuickBar').style.display = 'none';
         }
 
         let initialFiles = [];
@@ -1081,9 +1168,16 @@
 
             if (data.event === 'game.started') {
                 console.log('[index.html] Game started signal received from engine!');
-                document.getElementById('launcherModal').classList.add('hidden');
-                document.getElementById('fullscreenBtn').style.display = 'inline-flex';
-                const spinner = document.getElementById('bottomRightSpinner');
+                // Smoothly fade out the launcher/loading overlay once game is rendering
+                const modal = document.getElementById('launcherModal');
+                if (modal) {
+                    modal.style.transition = 'opacity 0.4s ease';
+                    modal.style.opacity = '0';
+                    setTimeout(() => {
+                        modal.classList.add('hidden');
+                    }, 400);
+                }
+                const spinner = document.getElementById('bottomLeftSpinner');
                 if (spinner) {
                     spinner.classList.add('hidden');
                 }
@@ -1091,7 +1185,8 @@
             }
 
             if (data.event === 'request-fullscreen') {
-                toggleFullscreen();
+                // Ignore automatic fullscreen request from engine so the game remains in window mode initially
+                console.log('[index.html] Ignored engine auto-fullscreen request (keeping window mode initially)');
                 return;
             }
 
@@ -1128,9 +1223,13 @@
                     ? 'Assets ready! Starting Vice City engine...'
                     : `Streaming resources (${currentFile + 1} / ${count})`;
                 document.getElementById('progressStats').textContent = `${currentFile + 1} / ${count} files (${loadedMB} MB)`;
-                document.getElementById('spinnerText').textContent = isLastFile
-                    ? 'Starting reVC engine...'
-                    : `Loading assets (${pct}%)...`;
+                
+                const spinnerText = document.getElementById('spinnerText');
+                if (spinnerText) {
+                    spinnerText.textContent = isLastFile
+                        ? 'Starting reVC engine...'
+                        : `Loading assets (${pct}%)...`;
+                }
 
                 if (currentFile < count) {
                     const path = initialFiles[currentFile];
@@ -1161,38 +1260,34 @@
                         document.getElementById('progressBar').style.width = '100%';
                         document.getElementById('progressPct').textContent = '100%';
                         document.getElementById('progressStatus').textContent = 'Starting Vice City engine...';
-                        document.getElementById('progressFile').textContent = 'Initializing WebAssembly & audio subsystem...';
-                        document.getElementById('spinnerText').textContent = 'Starting reVC engine...';
-
-                        // Smoothly hide launcher card after preload completes
-                        setTimeout(() => {
-                            document.getElementById('launcherModal').classList.add('hidden');
-                            document.getElementById('fullscreenBtn').style.display = 'inline-flex';
-                        }, 400);
-
-                        // Fallback auto-hide bottom-right spinner after 8s
-                        setTimeout(() => {
-                            const spinner = document.getElementById('bottomRightSpinner');
-                            if (spinner) spinner.classList.add('hidden');
-                        }, 8000);
+                        document.getElementById('progressFile').textContent = 'Compiling shaders & initializing audio...';
+                        if (spinnerText) spinnerText.textContent = 'Starting reVC engine...';
                     }
                 } else {
                     document.getElementById('progressBar').style.width = '100%';
                     document.getElementById('progressPct').textContent = '100%';
-                    document.getElementById('launcherModal').classList.add('hidden');
-                    document.getElementById('fullscreenBtn').style.display = 'inline-flex';
                 }
             } else if (data.event === 'preload.complete') {
                 console.log('[index.html] Preload complete received from engine');
                 document.getElementById('progressBar').style.width = '100%';
                 document.getElementById('progressPct').textContent = '100%';
                 document.getElementById('progressStatus').textContent = 'Starting Vice City engine...';
-                document.getElementById('progressFile').textContent = 'Initializing WebAssembly & audio subsystem...';
-                document.getElementById('spinnerText').textContent = 'Starting reVC engine...';
+                document.getElementById('progressFile').textContent = 'Compiling shaders & rendering 3D scene...';
+                const spinnerText = document.getElementById('spinnerText');
+                if (spinnerText) spinnerText.textContent = 'Launching Vice City...';
+
+                // Safety fallback: ensure overlay hides 5s after preload completes if not already hidden by game.started
                 setTimeout(() => {
-                    document.getElementById('launcherModal').classList.add('hidden');
-                    document.getElementById('fullscreenBtn').style.display = 'inline-flex';
-                }, 200);
+                    const modal = document.getElementById('launcherModal');
+                    if (modal && !modal.classList.contains('hidden')) {
+                        console.log('[index.html] Fallback timeout: revealing game view');
+                        modal.style.transition = 'opacity 0.4s ease';
+                        modal.style.opacity = '0';
+                        setTimeout(() => modal.classList.add('hidden'), 400);
+                    }
+                    const spinner = document.getElementById('bottomLeftSpinner');
+                    if (spinner) spinner.classList.add('hidden');
+                }, 5000);
             } else if (data.event === 'module.getasyncurl' && data.file) {
                 const buffer = await getAssetBuffer(data.file);
                 if (buffer) {
@@ -1215,14 +1310,59 @@
             modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
         }
 
-        function toggleFullscreen() {
-            const elem = document.documentElement;
-            if (!document.fullscreenElement) {
-                elem.requestFullscreen().catch(() => {});
+        function updateFsButtons(isFs) {
+            const fsBtn = document.getElementById('fullscreenBtn');
+            const winFsBtn = document.getElementById('winFsBtn');
+            const floatingExit = document.getElementById('floatingExitFsBtn');
+            if (fsBtn) fsBtn.textContent = isFs ? '✕ Exit Fullscreen' : '⛶ Fullscreen';
+            if (winFsBtn) winFsBtn.textContent = isFs ? '✕ Exit' : '⛶ Fullscreen';
+            if (floatingExit) floatingExit.style.display = isFs ? 'block' : 'none';
+        }
+
+        async function toggleFullscreen() {
+            const elem = document.getElementById('gameWindow') || document.documentElement;
+            const isCurrentlyFs = !!document.fullscreenElement || elem.classList.contains('css-fullscreen');
+            if (!isCurrentlyFs) {
+                try {
+                    if (elem.requestFullscreen) {
+                        await elem.requestFullscreen();
+                    } else if (elem.webkitRequestFullscreen) {
+                        await elem.webkitRequestFullscreen();
+                    } else {
+                        elem.classList.add('css-fullscreen');
+                    }
+                } catch (e) {
+                    console.log('[index.html] Fullscreen API blocked or failed, using CSS fullscreen:', e);
+                    elem.classList.add('css-fullscreen');
+                }
+                updateFsButtons(true);
             } else {
-                document.exitFullscreen().catch(() => {});
+                try {
+                    if (document.fullscreenElement) {
+                        if (document.exitFullscreen) await document.exitFullscreen();
+                        else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+                    }
+                } catch (e) {}
+                elem.classList.remove('css-fullscreen');
+                updateFsButtons(false);
             }
         }
+
+        document.addEventListener('fullscreenchange', () => {
+            const elem = document.getElementById('gameWindow');
+            const isFs = !!document.fullscreenElement || (elem && elem.classList.contains('css-fullscreen'));
+            updateFsButtons(isFs);
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const elem = document.getElementById('gameWindow');
+                if (elem && elem.classList.contains('css-fullscreen')) {
+                    elem.classList.remove('css-fullscreen');
+                    updateFsButtons(false);
+                }
+            }
+        });
     </script>
 </body>
 </html>

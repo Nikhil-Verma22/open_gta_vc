@@ -687,6 +687,33 @@
         }
         .attribution-footer a { color: #38bdf8; text-decoration: none; }
         .attribution-footer a:hover { text-decoration: underline; }
+
+        /* Floating Toast Notification */
+        .toast-notification {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 100001;
+            background: rgba(14, 7, 36, 0.96);
+            border: 2px solid var(--neon-cyan);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85), 0 0 20px rgba(36, 158, 245, 0.5);
+            font-size: 0.88rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        .toast-notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
@@ -702,6 +729,7 @@
 
         <div class="header-actions">
             <div id="assetStatus" class="status-badge ready">● Assets Ready</div>
+            <button id="headerLogBtn" class="btn btn-secondary" onclick="exportRuntimeLogs()" title="Export System Logs to TXT">📋 Export Logs</button>
             <button class="btn btn-secondary" onclick="toggleControlsModal()">🎮 Controls</button>
             <button id="headerSelectBtn" class="btn" onclick="document.getElementById('folderInput').click()">📁 Select Assets</button>
             <button id="fullscreenBtn" class="btn btn-secondary" onclick="toggleFullscreen()" style="display:inline-flex;">⛶ Fullscreen</button>
@@ -716,6 +744,7 @@
                     <span>🌴</span> Grand Theft Auto: Vice City
                 </div>
                 <div class="win-controls">
+                    <button id="winLogBtn" class="win-btn" onclick="exportRuntimeLogs()" title="Export System Logs to TXT">📋 Logs</button>
                     <button id="winFsBtn" class="win-btn" onclick="toggleFullscreen()" title="Fullscreen">⛶ Fullscreen</button>
                     <button class="win-btn" onclick="location.reload()" title="Reload Game">↺ Reload</button>
                 </div>
@@ -818,8 +847,18 @@
                     <tr><td>Pause / Main Menu</td><td>Esc</td><td>Start / Menu Button</td></tr>
                 </tbody>
             </table>
+
+            <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div>
+                    <div style="font-weight: 600; color: #38bdf8; font-size: 0.95rem;">📋 Telemetry & Runtime Logs</div>
+                    <div style="font-size: 0.78rem; color: #94a3b8;">Export a comprehensive text log of all requested, loaded, and failed assets, plus engine events.</div>
+                </div>
+                <button class="btn" style="background: linear-gradient(135deg, #0284c7, #6366f1); padding: 8px 16px; font-size: 0.82rem;" onclick="exportRuntimeLogs()">💾 Download Logs (.txt)</button>
+            </div>
         </div>
     </div>
+
+    <div id="toastNotification" class="toast-notification"></div>
 
     <footer class="attribution-footer">
         Grand Theft Auto: Vice City Browser Port &bull; Authored by the <a href="https://dos.zone/revcdos" target="_blank" rel="noopener">DOS.Zone Team</a> &bull; Destination: <a href="https://github.com/Nikhil-Verma22/open_gta_vc" target="_blank" rel="noopener">open_gta_vc</a>
@@ -831,6 +870,295 @@
             const cleanPath = window.location.pathname + '/' + window.location.search + window.location.hash;
             window.history.replaceState(null, '', cleanPath);
         }
+
+        // Toast notifications
+        function showToast(msg) {
+            let t = document.getElementById('toastNotification');
+            if (!t) {
+                t = document.createElement('div');
+                t.id = 'toastNotification';
+                t.className = 'toast-notification';
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(t._timer);
+            t._timer = setTimeout(() => {
+                t.classList.remove('show');
+            }, 4000);
+        }
+
+        // Comprehensive Telemetry & Runtime Logger
+        class TelemetryLogger {
+            constructor() {
+                this.startTime = Date.now();
+                this.entries = [];
+                this.maxEntries = 8000;
+                this.requestedFiles = new Map(); // key -> { path, count, firstAt, lastAt, source, status }
+                this.loadedFiles = new Map();    // key -> { path, size, source, durationMs, timestamp }
+                this.failedFiles = new Map();    // key -> { path, reason, attempts, timestamp, fallbackUsed }
+                this.activeOperations = new Map(); // opId -> { id, type, desc, startedAt }
+                this.opCounter = 0;
+                this.engineStatus = 'INITIALIZING';
+                this.stats = {
+                    totalRequests: 0,
+                    cacheHitsRam: 0,
+                    cacheHitsIdb: 0,
+                    networkFetches: 0,
+                    networkFailures: 0,
+                    fallbacksDelivered: 0,
+                    webglContextLostCount: 0,
+                    webglContextRestoredCount: 0,
+                };
+                this.record('SYSTEM', 'INFO', 'Telemetry Logger initialized. Tracking all asset streaming and engine events.');
+            }
+
+            formatElapsed(ms) {
+                const totalSec = Math.floor(ms / 1000);
+                const m = Math.floor(totalSec / 60).toString().padStart(2, '0');
+                const s = (totalSec % 60).toString().padStart(2, '0');
+                const millis = (ms % 1000).toString().padStart(3, '0');
+                return `${m}:${s}.${millis}`;
+            }
+
+            startOperation(type, desc) {
+                const id = ++this.opCounter;
+                this.activeOperations.set(id, { id, type, desc, startedAt: Date.now() });
+                this.record('OP_START', 'INFO', `Started [${type}]: ${desc}`, { opId: id });
+                return id;
+            }
+
+            endOperation(id, success = true, info = '') {
+                const op = this.activeOperations.get(id);
+                if (op) {
+                    const elapsed = Date.now() - op.startedAt;
+                    this.activeOperations.delete(id);
+                    this.record('OP_END', success ? 'INFO' : 'WARN', `Finished [${op.type}]: ${op.desc} in ${elapsed}ms ${info}`, { opId: id, elapsed });
+                }
+            }
+
+            markRequested(path, source = 'HOST') {
+                const k = path.toLowerCase();
+                this.stats.totalRequests++;
+                const existing = this.requestedFiles.get(k);
+                if (existing) {
+                    existing.count++;
+                    existing.lastAt = Date.now();
+                } else {
+                    this.requestedFiles.set(k, { path, count: 1, firstAt: Date.now(), lastAt: Date.now(), source, status: 'PENDING' });
+                }
+            }
+
+            markLoaded(path, size, source, durationMs = 0) {
+                const k = path.toLowerCase();
+                const req = this.requestedFiles.get(k);
+                if (req) req.status = 'LOADED';
+                this.loadedFiles.set(k, { path, size, source, durationMs, timestamp: Date.now() });
+                if (source === 'RAM') this.stats.cacheHitsRam++;
+                else if (source === 'IDB') this.stats.cacheHitsIdb++;
+                else if (source.startsWith('NETWORK')) this.stats.networkFetches++;
+            }
+
+            markFailed(path, reason, fallbackUsed = false) {
+                const k = path.toLowerCase();
+                const req = this.requestedFiles.get(k);
+                if (req) req.status = 'FAILED';
+                const existing = this.failedFiles.get(k);
+                if (existing) {
+                    existing.attempts++;
+                    existing.lastReason = reason;
+                } else {
+                    this.failedFiles.set(k, { path, reason, attempts: 1, timestamp: Date.now(), fallbackUsed });
+                }
+                this.stats.networkFailures++;
+                if (fallbackUsed) this.stats.fallbacksDelivered++;
+            }
+
+            record(category, level, message, details = null) {
+                const now = Date.now();
+                const elapsedMs = now - this.startTime;
+                const entry = {
+                    time: now,
+                    elapsed: elapsedMs,
+                    timeStr: this.formatElapsed(elapsedMs),
+                    iso: new Date(now).toISOString(),
+                    category: (category || 'GENERAL').toUpperCase(),
+                    level: (level || 'INFO').toUpperCase(),
+                    message: String(message),
+                    details: details ? (typeof details === 'object' ? JSON.stringify(details) : String(details)) : null
+                };
+                this.entries.push(entry);
+                if (this.entries.length > this.maxEntries) {
+                    this.entries.shift();
+                }
+
+                const prefix = `[${entry.timeStr}] [${entry.category}]`;
+                if (entry.level === 'ERROR') console.error(prefix, message, details || '');
+                else if (entry.level === 'WARN') console.warn(prefix, message, details || '');
+                else console.log(prefix, message, details || '');
+            }
+
+            exportLogText() {
+                const nowIso = new Date().toISOString();
+                const totalDuration = this.formatElapsed(Date.now() - this.startTime);
+                const win = document.getElementById('gameWindow');
+                const isFs = document.fullscreenElement != null;
+                const screenMode = isFs ? 'Fullscreen' : (win ? `Windowed (${win.offsetWidth}x${win.offsetHeight})` : 'Windowed');
+                const ramMb = (memoryCacheBytes / (1024 * 1024)).toFixed(1);
+                const idbCount = cachedKeysSet ? cachedKeysSet.size : 0;
+
+                let txt = '';
+                txt += '================================================================================\n';
+                txt += 'GRAND THEFT AUTO: VICE CITY (WEBASSEMBLY / reVC) - RUNTIME & TELEMETRY LOG\n';
+                txt += '================================================================================\n';
+                txt += `Generated (UTC):      ${nowIso}\n`;
+                txt += `User Agent:           ${navigator.userAgent}\n`;
+                txt += `Platform:             ${navigator.platform || 'Unknown'}\n`;
+                txt += `Display Mode:         ${screenMode}\n`;
+                txt += `Session Uptime:       ${totalDuration}\n`;
+                txt += `Engine Runtime State: ${this.engineStatus}\n`;
+                txt += `In-Memory RAM Cache:  ${ramMb} MB (${memoryBufferCache.size} files)\n`;
+                txt += `IndexedDB Store:      ${idbCount} cached files\n`;
+                txt += '\n';
+
+                txt += '================================================================================\n';
+                txt += 'EXECUTIVE TELEMETRY SUMMARY\n';
+                txt += '================================================================================\n';
+                txt += `Total Unique Files Requested:  ${this.requestedFiles.size}\n`;
+                txt += `Total Files Loaded (200 OK):   ${this.loadedFiles.size}\n`;
+                txt += `Total Failed Files:            ${this.failedFiles.size}\n`;
+                txt += `Total Fallbacks Delivered:     ${this.stats.fallbacksDelivered}\n`;
+                txt += `RAM Cache Hits:                ${this.stats.cacheHitsRam}\n`;
+                txt += `IndexedDB Cache Hits:          ${this.stats.cacheHitsIdb}\n`;
+                txt += `Direct Network Fetches:        ${this.stats.networkFetches}\n`;
+                txt += `Network / Fetch Errors:        ${this.stats.networkFailures}\n`;
+                txt += `WebGL Context Loss Count:      ${this.stats.webglContextLostCount}\n`;
+                txt += `Active Operations at Export:   ${this.activeOperations.size}\n`;
+                txt += '\n';
+
+                txt += '================================================================================\n';
+                txt += `SECTION 1: FAILED / MISSING ASSETS (${this.failedFiles.size} items)\n`;
+                txt += '================================================================================\n';
+                if (this.failedFiles.size === 0) {
+                    txt += '[None - All requested game assets resolved successfully!]\n';
+                } else {
+                    let i = 1;
+                    for (const [k, f] of this.failedFiles) {
+                        const req = this.requestedFiles.get(k);
+                        txt += `${i++}. File: ${f.path}\n`;
+                        txt += `   - Error Reason:      ${f.reason}\n`;
+                        txt += `   - Attempts:          ${f.attempts}\n`;
+                        txt += `   - First Requested:   ${req ? this.formatElapsed(req.firstAt - this.startTime) : 'N/A'}\n`;
+                        txt += `   - Fallback Supplied: ${f.fallbackUsed ? 'YES (Prevented engine crash)' : 'NO'}\n`;
+                    }
+                }
+                txt += '\n';
+
+                txt += '================================================================================\n';
+                txt += `SECTION 2: CURRENTLY ACTIVE / IN-FLIGHT OPERATIONS (${this.activeOperations.size} active)\n`;
+                txt += '================================================================================\n';
+                if (this.activeOperations.size === 0) {
+                    txt += '[None - All background and streaming tasks are idle/complete]\n';
+                } else {
+                    let i = 1;
+                    for (const [id, op] of this.activeOperations) {
+                        const el = this.formatElapsed(Date.now() - op.startedAt);
+                        txt += `${i++}. [${op.type}] ${op.desc} (In-flight for ${el})\n`;
+                    }
+                }
+                txt += '\n';
+
+                txt += '================================================================================\n';
+                txt += `SECTION 3: LOADED ASSETS INVENTORY (${this.loadedFiles.size} items grouped by type)\n`;
+                txt += '================================================================================\n';
+                const groups = {
+                    'Models & Meshes (.dff)': [],
+                    'Textures (.txd)': [],
+                    'Collisions (.col)': [],
+                    'Maps & Placements (.ipl / .ide / .dat)': [],
+                    'Audio & SFX (.raw / .mp3 / .wav / .adf)': [],
+                    'Animations (.ifp / cuts)': [],
+                    'Game Texts & Fonts (.gxt / .ttf)': [],
+                    'Other Resources': []
+                };
+                for (const [k, item] of this.loadedFiles) {
+                    if (k.endsWith('.dff')) groups['Models & Meshes (.dff)'].push(item);
+                    else if (k.endsWith('.txd')) groups['Textures (.txd)'].push(item);
+                    else if (k.endsWith('.col')) groups['Collisions (.col)'].push(item);
+                    else if (k.endsWith('.ipl') || k.endsWith('.ide') || k.endsWith('.dat')) groups['Maps & Placements (.ipl / .ide / .dat)'].push(item);
+                    else if (k.includes('audio/') || k.endsWith('.mp3') || k.endsWith('.wav') || k.endsWith('.adf') || k.endsWith('.raw')) groups['Audio & SFX (.raw / .mp3 / .wav / .adf)'].push(item);
+                    else if (k.endsWith('.ifp') || k.includes('cuts.')) groups['Animations (.ifp / cuts)'].push(item);
+                    else if (k.endsWith('.gxt') || k.endsWith('.ttf')) groups['Game Texts & Fonts (.gxt / .ttf)'].push(item);
+                    else groups['Other Resources'].push(item);
+                }
+
+                for (const [grpName, items] of Object.entries(groups)) {
+                    txt += `[${grpName}]: ${items.length} files\n`;
+                    for (const it of items) {
+                        const sizeKb = (it.size / 1024).toFixed(1);
+                        txt += `  - ${it.path} (${sizeKb} KB) [Source: ${it.source}] (${it.durationMs}ms)\n`;
+                    }
+                    txt += '\n';
+                }
+
+                txt += '================================================================================\n';
+                txt += `SECTION 4: CHRONOLOGICAL TELEMETRY STREAM (${this.entries.length} log events)\n`;
+                txt += '================================================================================\n';
+                for (const e of this.entries) {
+                    const det = e.details ? ` | ${e.details}` : '';
+                    txt += `[${e.timeStr}] [${e.category.padEnd(10)}] [${e.level.padEnd(5)}] ${e.message}${det}\n`;
+                }
+                txt += '\n================================================================================\n';
+                txt += 'END OF RUNTIME LOG\n';
+                txt += '================================================================================\n';
+                return txt;
+            }
+
+            downloadLogFile() {
+                const text = this.exportLogText();
+                const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const d = new Date();
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const hh = String(d.getHours()).padStart(2, '0');
+                const min = String(d.getMinutes()).padStart(2, '0');
+                const ss = String(d.getSeconds()).padStart(2, '0');
+                const filename = `gtavc_runtime_log_${yyyy}${mm}${dd}_${hh}${min}${ss}.txt`;
+
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    URL.revokeObjectURL(a.href);
+                    document.body.removeChild(a);
+                }, 1000);
+
+                showToast(`📋 Telemetry Log downloaded (${(text.length / 1024).toFixed(1)} KB, ${this.entries.length} events)`);
+            }
+        }
+
+        window.GameLogger = new TelemetryLogger();
+        window.exportRuntimeLogs = () => { if (window.GameLogger) window.GameLogger.downloadLogFile(); };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'F8' || (e.shiftKey && (e.key === 'L' || e.key === 'l'))) {
+                e.preventDefault();
+                exportRuntimeLogs();
+            }
+        });
+
+        // Global unhandled error interception
+        window.addEventListener('error', (e) => {
+            GameLogger.record('SYS_ERROR', 'ERROR', e.message || 'Window error', { filename: e.filename, lineno: e.lineno, colno: e.colno });
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            const reason = e.reason ? (e.reason.message || String(e.reason)) : 'unknown';
+            GameLogger.record('SYS_PROMISE', 'ERROR', 'Unhandled rejection: ' + reason);
+        });
 
         const ASSET_PREFIX = 'gtavc-assets/local';
         const BASE_HREF = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
@@ -932,21 +1260,50 @@
 
         function assetCandidates(rel) {
             const r = normalizeAssetRel(rel);
-            const out = [r];
+            const rLower = r.toLowerCase();
+            const set = new Set();
             
-            // Fallback: loose files extracted from gta3.img
-            let m = r.match(/^models\/([^/]+\.(dff|txd|col|ifp))$/i);
-            if (m) out.push(`models/gta3.img/${m[1].toLowerCase()}`);
+            // 1. Primary: lowercase path (matches all self-hosted repo files)
+            set.add(rLower);
+            // 2. Exact relative path
+            set.add(r);
 
-            m = r.match(/^models\/([^/]+)\/([^/]+\.(dff|txd|col|ifp))$/i);
-            if (m && m[1].toLowerCase() !== 'gta3.img' && m[1].toLowerCase() !== 'coll' && m[1].toLowerCase() !== 'generic') {
-                out.push(`models/gta3.img/${m[2].toLowerCase()}`);
+            // 3. Loose models extracted from gta3.img
+            let m = rLower.match(/^models\/([^/]+\.(dff|txd|col|ifp))$/i);
+            if (m) {
+                set.add(`models/gta3.img/${m[1]}`);
             }
 
-            if (r.endsWith('cuts.img')) {
-                out.push('anim/cuts.img');
+            m = rLower.match(/^models\/([^/]+)\/([^/]+\.(dff|txd|col|ifp))$/i);
+            if (m && m[1] !== 'gta3.img' && m[1] !== 'coll' && m[1] !== 'generic') {
+                set.add(`models/gta3.img/${m[2]}`);
             }
-            return out;
+
+            // 4. Cuts.img handling
+            if (rLower.endsWith('cuts.img') || rLower.startsWith('anim/cuts.img/')) {
+                set.add('anim/cuts.img');
+            }
+
+            // 5. Audio format cross-checks (.wav, .mp3, .adf)
+            if (rLower.startsWith('audio/')) {
+                const dotIdx = rLower.lastIndexOf('.');
+                if (dotIdx !== -1) {
+                    const prefix = rLower.substring(0, dotIdx);
+                    const ext = rLower.substring(dotIdx);
+                    if (ext === '.wav') {
+                        set.add(prefix + '.mp3');
+                        set.add(prefix + '.adf');
+                    } else if (ext === '.mp3') {
+                        set.add(prefix + '.wav');
+                        set.add(prefix + '.adf');
+                    } else if (ext === '.adf') {
+                        set.add(prefix + '.mp3');
+                        set.add(prefix + '.wav');
+                    }
+                }
+            }
+
+            return Array.from(set);
         }
 
         let filesMap = new Map();
@@ -1047,15 +1404,20 @@
         let totalBytesLoaded = 0;
         let memoryCacheBytes = 0;
         const MAX_MEMORY_CACHE_BYTES = 256 * 1024 * 1024; // 256MB RAM cache budget
+        let activeInteractiveStreams = 0;
 
         // Pinned critical asset keys that are never evicted from RAM
         const pinnedCriticalKeys = new Set();
 
         async function fetchWithRetry(url, retries = 3, backoff = 200) {
+            // Adaptive timeout: 60s for large audio / radio / big archive files; 30s for normal files
+            const isLarge = url.includes('audio/') || url.endsWith('.adf') || url.endsWith('.raw') || url.endsWith('.img');
+            const timeoutMs = isLarge ? 60000 : 30000;
+
             for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
                     const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), 10000);
+                    const timer = setTimeout(() => controller.abort(), timeoutMs);
                     const res = await fetch(url, { signal: controller.signal });
                     clearTimeout(timer);
                     if (res.ok) {
@@ -1075,6 +1437,8 @@
         }
 
         async function getAssetBuffer(path) {
+            const startFetchTime = performance.now();
+            GameLogger.markRequested(path, 'ASSET_SYSTEM');
             const candidates = assetCandidates(path);
 
             // 0. Check in-memory buffer cache first (immediate resolution)
@@ -1082,11 +1446,16 @@
                 const k = cand.toLowerCase();
                 if (memoryBufferCache.has(k)) {
                     const val = memoryBufferCache.get(k);
+                    let buf = null;
                     if (val instanceof Promise) {
-                        const buf = await val;
-                        if (buf && buf.byteLength > 0) return buf;
-                    } else if (val && val.byteLength > 0) {
-                        return val;
+                        buf = await val;
+                    } else {
+                        buf = val;
+                    }
+                    if (buf && buf.byteLength > 0) {
+                        const duration = Math.round(performance.now() - startFetchTime);
+                        GameLogger.markLoaded(path, buf.byteLength, 'RAM', duration);
+                        return buf;
                     }
                 }
             }
@@ -1099,6 +1468,8 @@
                     if (buf && buf.byteLength > 0) {
                         memoryBufferCache.set(k, buf);
                         putCachedFile(k, buf);
+                        const duration = Math.round(performance.now() - startFetchTime);
+                        GameLogger.markLoaded(path, buf.byteLength, 'CUSTOM_FOLDER', duration);
                         return buf;
                     }
                 }
@@ -1109,11 +1480,12 @@
                 const k = cand.toLowerCase();
                 const cached = await getCachedFile(k);
                 if (cached && cached.byteLength > 0) {
-                    // Populate into memory cache for future instant hits
                     if (memoryCacheBytes < MAX_MEMORY_CACHE_BYTES) {
                         memoryBufferCache.set(k, cached);
                         memoryCacheBytes += cached.byteLength;
                     }
+                    const duration = Math.round(performance.now() - startFetchTime);
+                    GameLogger.markLoaded(path, cached.byteLength, 'IDB', duration);
                     return cached;
                 }
             }
@@ -1123,7 +1495,11 @@
                 const k = cand.toLowerCase();
                 if (inFlightRequests.has(k)) {
                     const buf = await inFlightRequests.get(k);
-                    if (buf && buf.byteLength > 0) return buf;
+                    if (buf && buf.byteLength > 0) {
+                        const duration = Math.round(performance.now() - startFetchTime);
+                        GameLogger.markLoaded(path, buf.byteLength, 'NETWORK_COALESCED', duration);
+                        return buf;
+                    }
                 }
 
                 const fetchPromise = (async () => {
@@ -1145,12 +1521,18 @@
                 inFlightRequests.set(k, fetchPromise);
                 try {
                     const buf = await fetchPromise;
-                    if (buf && buf.byteLength > 0) return buf;
+                    if (buf && buf.byteLength > 0) {
+                        const duration = Math.round(performance.now() - startFetchTime);
+                        GameLogger.markLoaded(path, buf.byteLength, 'NETWORK', duration);
+                        return buf;
+                    }
                 } finally {
                     inFlightRequests.delete(k);
                 }
             }
 
+            const totalDuration = Math.round(performance.now() - startFetchTime);
+            GameLogger.markFailed(path, `All candidates failed to resolve after ${totalDuration}ms`, true);
             return null;
         }
 
@@ -1227,15 +1609,19 @@
 
                 // Phase 1: Rapid Pre-Warm of Tier 1 Critical files into RAM & IndexedDB
                 console.log('[BackgroundCache] Phase 1: Pre-warming Tier 1 critical files into RAM and IndexedDB...');
+                GameLogger.record('CACHE', 'INFO', `Starting Phase 1 pre-warm of ${tier1Critical.length} critical gameplay assets`);
                 let t1Index = 0;
                 let t1CachedCount = 0;
-                const T1_CONCURRENCY = 6;
+                const T1_CONCURRENCY = 2; // Moderate concurrency so network sockets remain available for gameplay
 
                 async function workerTier1() {
                     while (t1Index < tier1Critical.length) {
+                        // Priority yield: Pause background caching when interactive gameplay streams are active
+                        while (activeInteractiveStreams > 0) {
+                            await new Promise(r => setTimeout(r, 60));
+                        }
                         const file = tier1Critical[t1Index++];
                         const k = file.toLowerCase();
-                        // Check if already in memory or DB
                         if (!memoryBufferCache.has(k)) {
                             const cached = await getCachedFile(k);
                             if (cached) {
@@ -1251,6 +1637,7 @@
                         } else {
                             t1CachedCount++;
                         }
+                        await new Promise(r => setTimeout(r, 15)); // Yield between downloads
                     }
                 }
 
@@ -1260,15 +1647,20 @@
                 }
                 await Promise.all(t1Workers);
                 console.log(`[BackgroundCache] Phase 1 Complete! ${t1CachedCount}/${tier1Critical.length} critical gameplay assets locked into memory.`);
+                GameLogger.record('CACHE', 'SUCCESS', `Phase 1 Complete! ${t1CachedCount}/${tier1Critical.length} critical assets cached`);
 
                 // Phase 2: Progressive Full-Game Caching into IndexedDB (Low priority / non-intrusive)
                 console.log('[BackgroundCache] Phase 2: Starting progressive background caching of full game into IndexedDB...');
+                GameLogger.record('CACHE', 'INFO', `Starting Phase 2 progressive full-game cache (${tier2Remaining.length} files)`);
                 let t2Index = 0;
-                const T2_CONCURRENCY = 2; // Low concurrency to avoid competing with gameplay network/CPU
+                const T2_CONCURRENCY = 1; // Single worker to avoid any competition with gameplay audio/streaming
                 let t2CachedCount = 0;
 
                 async function workerTier2() {
                     while (t2Index < tier2Remaining.length) {
+                        while (activeInteractiveStreams > 0) {
+                            await new Promise(r => setTimeout(r, 80));
+                        }
                         const file = tier2Remaining[t2Index++];
                         const k = file.toLowerCase();
                         if (cachedKeysSet && cachedKeysSet.has(k)) {
@@ -1279,8 +1671,8 @@
                         if (buf) {
                             t2CachedCount++;
                         }
-                        // Gentle throttle: yield 25ms to the browser event loop between items
-                        await new Promise(r => setTimeout(r, 25));
+                        // Yield to browser event loop
+                        await new Promise(r => setTimeout(r, 35));
                     }
                 }
 
@@ -1291,15 +1683,18 @@
                 // Launch Phase 2 in background without blocking the caller so game stays responsive
                 Promise.all(t2Workers).then(() => {
                     console.log(`[BackgroundCache] Full Game Caching Complete! Total cached files: ${allStreamFiles.length}`);
+                    GameLogger.record('CACHE', 'SUCCESS', `Full Game Caching Complete! Total cached files: ${allStreamFiles.length}`);
                     const badge = document.getElementById('assetStatus');
                     if (badge) {
                         badge.textContent = '● Entire Game Cached Locally';
                     }
                 }).catch(err => {
                     console.warn('[BackgroundCache] Phase 2 worker error:', err);
+                    GameLogger.record('CACHE', 'WARN', 'Phase 2 worker error: ' + err.message);
                 });
             } catch (err) {
                 console.warn('[BackgroundCache] Background progressive caching notice:', err);
+                GameLogger.record('CACHE', 'WARN', 'Background caching notice: ' + err.message);
             }
         }
 
@@ -1309,6 +1704,7 @@
         function startPlay() {
             if (isGameStarted) return;
             isGameStarted = true;
+            GameLogger.record('LAUNCH', 'INFO', 'User initiated game start (Play button clicked)');
 
             // Show asset loading bar in launcher card
             document.getElementById('progressBox').style.display = 'flex';
@@ -1364,8 +1760,26 @@
             const data = event.data;
             if (!data || !data.event) return;
 
+            if (data.event === 'log.entry') {
+                GameLogger.record(data.category, data.level, data.message, data.details);
+                return;
+            }
+
+            if (data.event === 'engine.aborted') {
+                GameLogger.engineStatus = 'ABORTED: ' + data.what;
+                GameLogger.record('ENGINE', 'ERROR', 'Engine Aborted: ' + data.what);
+                const badge = document.getElementById('assetStatus');
+                if (badge) {
+                    badge.className = 'status-badge error';
+                    badge.textContent = '● Engine Error (Click Logs)';
+                }
+                showToast('⚠️ Engine halted: ' + data.what + ' - Click "Logs" to export report.');
+                return;
+            }
+
             if (data.event === 'engine.ack_start') {
                 console.log('[index.html] Engine acknowledged start');
+                GameLogger.record('ENGINE', 'INFO', 'Engine acknowledged start signal');
                 if (startRetryTimer) {
                     clearInterval(startRetryTimer);
                     startRetryTimer = null;
@@ -1375,6 +1789,7 @@
 
             if (data.event === 'engine.ready') {
                 console.log('[index.html] Engine iframe ready');
+                GameLogger.record('ENGINE', 'INFO', 'Engine iframe reported ready');
                 if (isGameStarted) {
                     const iframe = document.getElementById('gameFrame');
                     iframe.contentWindow.postMessage({ event: 'host.start' }, '*');
@@ -1384,6 +1799,8 @@
 
             if (data.event === 'game.started') {
                 console.log('[index.html] Game started signal received from engine!');
+                GameLogger.engineStatus = 'RUNNING';
+                GameLogger.record('ENGINE', 'SUCCESS', 'reVC engine main loop active. Game started rendering!');
                 // Start background progressive caching pipeline
                 startProgressiveBackgroundCache();
 
@@ -1404,7 +1821,6 @@
             }
 
             if (data.event === 'request-fullscreen') {
-                // Ignore automatic fullscreen request from engine so the game remains in window mode initially
                 console.log('[index.html] Ignored engine auto-fullscreen request (keeping window mode initially)');
                 return;
             }
@@ -1425,6 +1841,7 @@
                 currentFile = -1;
                 prefetchIndex = 0;
 
+                GameLogger.record('VFS', 'INFO', `module.initfs received: ${initialFiles.length} files in preload list`);
                 // Start pipelined background prefetching
                 startPrefetchWorkerPool();
 
@@ -1481,6 +1898,7 @@
                         document.getElementById('progressStatus').textContent = 'Starting Vice City engine...';
                         document.getElementById('progressFile').textContent = 'Compiling shaders & initializing audio...';
                         if (spinnerText) spinnerText.textContent = 'Starting reVC engine...';
+                        GameLogger.record('PRELOAD', 'SUCCESS', `Preload completed! Total ${count} files delivered into VFS.`);
                     }
                 } else {
                     document.getElementById('progressBar').style.width = '100%';
@@ -1488,7 +1906,7 @@
                 }
             } else if (data.event === 'preload.complete') {
                 console.log('[index.html] Preload complete received from engine');
-                // Trigger Tier 1 background pre-warming immediately upon preload completion
+                GameLogger.record('PRELOAD', 'INFO', 'Engine signaled preload.complete. Starting background cache.');
                 startProgressiveBackgroundCache();
 
                 document.getElementById('progressBar').style.width = '100%';
@@ -1511,18 +1929,36 @@
                     if (spinner) spinner.classList.add('hidden');
                 }, 5000);
             } else if (data.event === 'module.getasyncurl' && data.file) {
-                const buffer = await getAssetBuffer(data.file);
-                if (buffer && buffer.byteLength > 0) {
+                activeInteractiveStreams++;
+                const opId = GameLogger.startOperation('STREAM', data.file);
+                try {
+                    const buffer = await getAssetBuffer(data.file);
+                    if (buffer && buffer.byteLength > 0) {
+                        GameLogger.record('STREAM', 'SUCCESS', `Delivered asset: ${data.file} (${buffer.byteLength} bytes)`);
+                        event.source.postMessage({
+                            event: '>module.getasyncurl',
+                            file: data.file,
+                            data: new Uint8Array(buffer),
+                        }, '*', [buffer.slice(0)]);
+                    } else {
+                        GameLogger.record('STREAM', 'WARN', `Stream asset empty/missing on host: ${data.file} - delivering safe 0-byte buffer`);
+                        event.source.postMessage({
+                            event: '>module.getasyncurl',
+                            file: data.file,
+                            data: new Uint8Array(0),
+                        }, '*');
+                    }
+                    GameLogger.endOperation(opId, true);
+                } catch (err) {
+                    GameLogger.record('STREAM', 'ERROR', `Error processing getasyncurl for ${data.file}: ${err.message}`);
                     event.source.postMessage({
                         event: '>module.getasyncurl',
                         file: data.file,
-                        data: new Uint8Array(buffer),
-                    }, '*', [buffer.slice(0)]);
-                } else {
-                    event.source.postMessage({
-                        event: '>module.getasyncurl',
-                        file: data.file,
+                        data: new Uint8Array(0),
                     }, '*');
+                    GameLogger.endOperation(opId, false, err.message);
+                } finally {
+                    activeInteractiveStreams = Math.max(0, activeInteractiveStreams - 1);
                 }
             }
         });

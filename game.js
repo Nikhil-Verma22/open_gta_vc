@@ -329,15 +329,40 @@ async function loadGame() {
                         const url = URL.createObjectURL(new Blob([data.data.buffer]));
                         resolve(url);
                     } else {
-                        reject(new Error("File not found or empty: " + file));
+                        // CRITICAL RESILIENCE FIX: Never reject or return null!
+                        // Returning a safe empty blob URL prevents WASM _skyAssetFetch(0, stream_id)
+                        // from crashing the entire engine with a null pointer exception.
+                        console.warn('[game.js] Streamed asset unavailable or empty:', file, '- delivering safe empty fallback blob');
+                        try {
+                            window.top.postMessage({
+                                event: 'log.entry',
+                                category: 'STREAM',
+                                level: 'WARN',
+                                message: 'Streamed asset empty/missing on host: ' + file + ' - safe fallback delivered',
+                                details: { file }
+                            }, '*');
+                        } catch (e) {}
+                        const fallbackUrl = URL.createObjectURL(new Blob([new Uint8Array(0)]));
+                        resolve(fallbackUrl);
                     }
                 }
             };
+            // 60-second watchdog with safe fallback resolution to prevent sudden freeze on slow connections
             timeoutId = setTimeout(() => {
                 window.removeEventListener('message', listener);
-                console.warn('[game.js] getAsyncUrl watchdog timeout for:', file);
-                reject(new Error("Timeout loading file: " + file));
-            }, 12000);
+                console.warn('[game.js] getAsyncUrl watchdog timeout (60s) for:', file, '- delivering safe empty fallback blob');
+                try {
+                    window.top.postMessage({
+                        event: 'log.entry',
+                        category: 'STREAM',
+                        level: 'WARN',
+                        message: 'Watchdog timeout (60s) for streamed asset: ' + file + ' - safe fallback delivered',
+                        details: { file }
+                    }, '*');
+                } catch (e) {}
+                const fallbackUrl = URL.createObjectURL(new Blob([new Uint8Array(0)]));
+                resolve(fallbackUrl);
+            }, 60000);
             window.addEventListener('message', listener);
             window.top.postMessage({
                 event: 'module.getasyncurl',
@@ -444,13 +469,72 @@ async function loadGame() {
             if (window._notifyGameStarted && (line.includes('LOAD frontend') || line.includes('Eaten sfx sound') || line.includes('frontend2'))) {
                 window._notifyGameStarted('frontend_loaded');
             }
+            if (line.includes('error') || line.includes('Error') || line.includes('fail') || line.includes('FAIL')) {
+                try {
+                    window.top.postMessage({
+                        event: 'log.entry',
+                        category: 'ENGINE',
+                        level: 'WARN',
+                        message: line
+                    }, '*');
+                } catch (e) {}
+            }
         },
-        printErr: (...args) => console.error(args.join(' ')),
+        printErr: (...args) => {
+            const line = args.join(' ');
+            console.error(line);
+            try {
+                window.top.postMessage({
+                    event: 'log.entry',
+                    category: 'ENGINE',
+                    level: 'ERROR',
+                    message: line
+                }, '*');
+            } catch (e) {}
+        },
+        onAbort: (what) => {
+            const msg = 'WASM ENGINE ABORT: ' + what;
+            console.error(msg);
+            try {
+                window.top.postMessage({
+                    event: 'engine.aborted',
+                    what: String(what)
+                }, '*');
+                window.top.postMessage({
+                    event: 'log.entry',
+                    category: 'ENGINE',
+                    level: 'ERROR',
+                    message: msg,
+                    details: { what: String(what) }
+                }, '*');
+            } catch (e) {}
+        },
         canvas: function () {
             const canvas = document.getElementById('canvas');
             canvas.addEventListener('webglcontextlost', (e) => {
-                statusElement.textContent = 'WebGL context lost. Please reload the page.';
                 e.preventDefault();
+                console.warn('[game.js] WebGL context lost!');
+                if (statusElement) statusElement.textContent = 'WebGL context lost. Restoring...';
+                try {
+                    window.top.postMessage({
+                        event: 'log.entry',
+                        category: 'RENDER',
+                        level: 'WARN',
+                        message: 'WebGL context lost. Recovery initiated.',
+                    }, '*');
+                } catch (err) {}
+            });
+            canvas.addEventListener('webglcontextrestored', (e) => {
+                console.log('[game.js] WebGL context restored successfully!');
+                if (statusElement) statusElement.textContent = '';
+                try {
+                    window.top.postMessage({
+                        event: 'log.entry',
+                        category: 'RENDER',
+                        level: 'INFO',
+                        message: 'WebGL context restored successfully.',
+                    }, '*');
+                } catch (err) {}
             });
             return canvas;
         }(),
@@ -983,3 +1067,29 @@ function getRevcIni() {
 }
 
 const revc_ini = getRevcIni();
+
+// Global runtime error listeners to capture any unhandled exceptions in the engine frame
+window.addEventListener('error', (e) => {
+    try {
+        window.top.postMessage({
+            event: 'log.entry',
+            category: 'ENGINE_EXCEPTION',
+            level: 'ERROR',
+            message: e.message || 'Script error',
+            details: { filename: e.filename, lineno: e.lineno, colno: e.colno, error: e.error ? String(e.error) : null }
+        }, '*');
+    } catch (err) {}
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+    try {
+        const msg = e.reason ? (e.reason.message || String(e.reason)) : 'Unknown rejection';
+        window.top.postMessage({
+            event: 'log.entry',
+            category: 'ENGINE_PROMISE',
+            level: 'ERROR',
+            message: 'Unhandled Promise Rejection: ' + msg,
+            details: { reason: String(e.reason) }
+        }, '*');
+    } catch (err) {}
+});

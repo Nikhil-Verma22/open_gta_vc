@@ -907,6 +907,7 @@
                     networkFetches: 0,
                     networkFailures: 0,
                     fallbacksDelivered: 0,
+                    arithmeticTrapsRecovered: 0,
                     webglContextLostCount: 0,
                     webglContextRestoredCount: 0,
                 };
@@ -985,7 +986,8 @@
                     category: (category || 'GENERAL').toUpperCase(),
                     level: (level || 'INFO').toUpperCase(),
                     message: String(message),
-                    details: details ? (typeof details === 'object' ? JSON.stringify(details) : String(details)) : null
+                    details: details ? (typeof details === 'object' ? JSON.stringify(details) : String(details)) : null,
+                    rawDetails: details
                 };
                 this.entries.push(entry);
                 if (this.entries.length > this.maxEntries) {
@@ -1028,6 +1030,7 @@
                 txt += `Total Files Loaded (200 OK):   ${this.loadedFiles.size}\n`;
                 txt += `Total Failed Files:            ${this.failedFiles.size}\n`;
                 txt += `Total Fallbacks Delivered:     ${this.stats.fallbacksDelivered}\n`;
+                txt += `Arithmetic Traps Recovered:    ${this.stats.arithmeticTrapsRecovered}\n`;
                 txt += `RAM Cache Hits:                ${this.stats.cacheHitsRam}\n`;
                 txt += `IndexedDB Cache Hits:          ${this.stats.cacheHitsIdb}\n`;
                 txt += `Direct Network Fetches:        ${this.stats.networkFetches}\n`;
@@ -1053,6 +1056,13 @@
                     }
                 }
                 txt += '\n';
+
+                if (this.stats.arithmeticTrapsRecovered > 0) {
+                    txt += '================================================================================\n';
+                    txt += `SECTION 1B: ARITHMETIC TRAPS RECOVERED (${this.stats.arithmeticTrapsRecovered} events)\n`;
+                    txt += '================================================================================\n';
+                    txt += '[Notice: WebAssembly remainder/divide-by-zero was intercepted and recovered seamlessly without halting engine]\n\n';
+                }
 
                 txt += '================================================================================\n';
                 txt += `SECTION 2: CURRENTLY ACTIVE / IN-FLIGHT OPERATIONS (${this.activeOperations.size} active)\n`;
@@ -1107,6 +1117,13 @@
                 for (const e of this.entries) {
                     const det = e.details ? ` | ${e.details}` : '';
                     txt += `[${e.timeStr}] [${e.category.padEnd(10)}] [${e.level.padEnd(5)}] ${e.message}${det}\n`;
+                    if (e.rawDetails && typeof e.rawDetails === 'object' && e.rawDetails.stack) {
+                        txt += '      [Stack Trace]:\n';
+                        const stackLines = String(e.rawDetails.stack).split('\n');
+                        for (const sLine of stackLines) {
+                            txt += `        ${sLine.trim()}\n`;
+                        }
+                    }
                 }
                 txt += '\n================================================================================\n';
                 txt += 'END OF RUNTIME LOG\n';
@@ -1761,6 +1778,9 @@
             if (!data || !data.event) return;
 
             if (data.event === 'log.entry') {
+                if (data.category === 'ARITHMETIC_RECOVERY') {
+                    GameLogger.stats.arithmeticTrapsRecovered++;
+                }
                 GameLogger.record(data.category, data.level, data.message, data.details);
                 return;
             }

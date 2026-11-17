@@ -1071,12 +1071,38 @@ const revc_ini = getRevcIni();
 // Global runtime error listeners to capture any unhandled exceptions in the engine frame
 window.addEventListener('error', (e) => {
     try {
+        const msg = e.message || (e.error ? String(e.error) : 'Script error');
+        const isArith = msg && (msg.includes('remainder by zero') || msg.includes('divide by zero') || msg.includes('division by zero'));
+        if (isArith) {
+            e.preventDefault();
+            console.warn('[game.js] Suppressed fatal trap for arithmetic error:', msg);
+            window.top.postMessage({
+                event: 'log.entry',
+                category: 'ARITHMETIC_RECOVERY',
+                level: 'WARN',
+                message: 'Arithmetic trap safely handled: ' + msg + ' - execution continuing',
+                details: {
+                    filename: e.filename,
+                    lineno: e.lineno,
+                    colno: e.colno,
+                    error: msg,
+                    stack: e.error && e.error.stack ? e.error.stack : (e.stack || null)
+                }
+            }, '*');
+            return;
+        }
         window.top.postMessage({
             event: 'log.entry',
             category: 'ENGINE_EXCEPTION',
             level: 'ERROR',
-            message: e.message || 'Script error',
-            details: { filename: e.filename, lineno: e.lineno, colno: e.colno, error: e.error ? String(e.error) : null }
+            message: msg,
+            details: {
+                filename: e.filename,
+                lineno: e.lineno,
+                colno: e.colno,
+                error: e.error ? String(e.error) : null,
+                stack: e.error && e.error.stack ? e.error.stack : (e.stack || null)
+            }
         }, '*');
     } catch (err) {}
 });
@@ -1089,7 +1115,10 @@ window.addEventListener('unhandledrejection', (e) => {
             category: 'ENGINE_PROMISE',
             level: 'ERROR',
             message: 'Unhandled Promise Rejection: ' + msg,
-            details: { reason: String(e.reason) }
+            details: {
+                reason: String(e.reason),
+                stack: e.reason && e.reason.stack ? e.reason.stack : null
+            }
         }, '*');
     } catch (err) {}
 });

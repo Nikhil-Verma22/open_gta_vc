@@ -105,8 +105,8 @@ if __name__ == '__main__':
     print("=" * 60)
     print("Press Ctrl+C to stop the server.\n")
 
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(('127.0.0.1', port), ViceCityHTTPHandler) as httpd:
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    with socketserver.ThreadingTCPServer(('127.0.0.1', port), ViceCityHTTPHandler) as httpd:
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

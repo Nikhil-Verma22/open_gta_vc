@@ -473,6 +473,71 @@
             width: 16vmin;
         }
 
+        /* Car Steering Controls: Dedicated < and > arrow buttons */
+        .touch-control.left,
+        .touch-control.right {
+            display: none;
+            position: absolute;
+            width: 15vmin;
+            height: 15vmin;
+            bottom: 7vmin;
+            z-index: 120;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: transform 0.08s ease, filter 0.08s ease, opacity 0.08s ease;
+        }
+
+        .touch-control.left {
+            left: 4vmin;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180' fill='none'%3E%3Ccircle cx='90' cy='90' r='84' stroke='rgba(255,255,255,0.85)' stroke-width='8' fill='rgba(0,0,0,0.45)'/%3E%3Cpath d='M108 52 L60 90 L108 128' stroke='%23fff' stroke-width='16' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+        }
+
+        .touch-control.right {
+            left: 22vmin;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180' fill='none'%3E%3Ccircle cx='90' cy='90' r='84' stroke='rgba(255,255,255,0.85)' stroke-width='8' fill='rgba(0,0,0,0.45)'/%3E%3Cpath d='M72 52 L120 90 L72 128' stroke='%23fff' stroke-width='16' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+        }
+
+        .touch-control.left:active,
+        .touch-control.left.active,
+        .touch-control.right:active,
+        .touch-control.right.active {
+            transform: scale(0.92);
+            filter: brightness(1.4) drop-shadow(0 0 12px rgba(255, 64, 180, 0.9));
+            opacity: 1 !important;
+        }
+
+        /* When in vehicle (data-state-car="1"): show steering buttons, hide virtual joystick */
+        [data-state-car="1"] .touch-control.left,
+        [data-state-car="1"] .touch-control.right {
+            display: block !important;
+        }
+
+        [data-state-car="1"] #move {
+            display: none !important;
+            pointer-events: none !important;
+        }
+
+        /* When on foot (data-state-car="0"): hide steering buttons */
+        [data-state-car="0"] .touch-control.left,
+        [data-state-car="0"] .touch-control.right {
+            display: none !important;
+        }
+
+        /* Suppress during menus, cutscenes, or downloads */
+        [data-state-menu="1"] .touch-control.left,
+        [data-state-menu="1"] .touch-control.right,
+        [data-state-cutscene="1"] .touch-control.left,
+        [data-state-cutscene="1"] .touch-control.right,
+        [data-state-disable-controls="1"] .touch-control.left,
+        [data-state-disable-controls="1"] .touch-control.right,
+        [data-state-download="1"] .touch-control.left,
+        [data-state-download="1"] .touch-control.right {
+            display: none !important;
+        }
+
         #move {
             position: fixed;
             top: 0;

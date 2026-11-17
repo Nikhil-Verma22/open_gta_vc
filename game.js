@@ -7,9 +7,17 @@ var spinnerElement = document.getElementById('spinner');
 var wasm_content = params.get("wasm");
 
 const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-let isTouch = isMobile && window.matchMedia('(pointer: coarse)').matches;
+let isTouch = (isMobile && window.matchMedia('(pointer: coarse)').matches) ||
+              ('ontouchstart' in window) ||
+              (navigator.maxTouchPoints > 0) ||
+              params.get('touch') === '1';
 
 document.body.dataset.isTouch = isTouch ? 1 : 0;
+
+window.addEventListener('touchstart', function onFirstTouch() {
+    document.body.dataset.isTouch = "1";
+    window.removeEventListener('touchstart', onFirstTouch);
+}, { passive: true });
 
 const dataSize = 130 * 1024 * 1024;
 const textDecoder = new TextDecoder();
@@ -311,18 +319,25 @@ async function loadGame() {
         },
         getAsyncUrl: (file) => new Promise((resolve, reject) => {
             file = file.replaceAll("\\", "/").replaceAll("//", "/");
+            let timeoutId = null;
             const listener = (event) => {
                 const data = event.data;
-                if (data.event === '>module.getasyncurl' && data.file === file) {
+                if (data && data.event === '>module.getasyncurl' && data.file === file) {
                     window.removeEventListener('message', listener);
-                    if (data.data) {
+                    if (timeoutId) clearTimeout(timeoutId);
+                    if (data.data && data.data.length > 0) {
                         const url = URL.createObjectURL(new Blob([data.data.buffer]));
                         resolve(url);
                     } else {
-                        reject(new Error("File not found: " + file));
+                        reject(new Error("File not found or empty: " + file));
                     }
                 }
-            }
+            };
+            timeoutId = setTimeout(() => {
+                window.removeEventListener('message', listener);
+                console.warn('[game.js] getAsyncUrl watchdog timeout for:', file);
+                reject(new Error("Timeout loading file: " + file));
+            }, 12000);
             window.addEventListener('message', listener);
             window.top.postMessage({
                 event: 'module.getasyncurl',
@@ -587,6 +602,146 @@ async function loadGame() {
         lockTargetWhilePressed: false,
         tapTarget: document.querySelector('.touch-control.fireLeft'),
     }]);
+
+    // Setup car steering: Dedicated Left (<) and Right (>) buttons
+    const steerLeftBtn = document.querySelector('.touch-control.left');
+    const steerRightBtn = document.querySelector('.touch-control.right');
+    let isLeftPressed = false;
+    let isRightPressed = false;
+
+    function updateSteerAxis() {
+        if (isLeftPressed && !isRightPressed) {
+            emulator.MoveAxis(0, 0, -1.0);
+            emulator.PressButton(0, 14, 1.0);
+            emulator.PressButton(0, 15, 0.0);
+        } else if (isRightPressed && !isLeftPressed) {
+            emulator.MoveAxis(0, 0, 1.0);
+            emulator.PressButton(0, 15, 1.0);
+            emulator.PressButton(0, 14, 0.0);
+        } else {
+            emulator.MoveAxis(0, 0, 0.0);
+            emulator.PressButton(0, 14, 0.0);
+            emulator.PressButton(0, 15, 0.0);
+        }
+    }
+
+    function dispatchKeyEvent(type, code, key, keyCode) {
+        try {
+            const ev = new KeyboardEvent(type, {
+                code,
+                key,
+                keyCode,
+                which: keyCode,
+                bubbles: true,
+                cancelable: true,
+            });
+            window.dispatchEvent(ev);
+            document.dispatchEvent(ev);
+            const canvas = document.getElementById('canvas');
+            if (canvas) canvas.dispatchEvent(ev);
+        } catch (e) {}
+    }
+
+    function handleLeftStart(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (isLeftPressed) return;
+        isLeftPressed = true;
+        if (steerLeftBtn) steerLeftBtn.classList.add('active');
+        updateSteerAxis();
+        dispatchKeyEvent('keydown', 'ArrowLeft', 'ArrowLeft', 37);
+        dispatchKeyEvent('keydown', 'KeyA', 'a', 65);
+    }
+
+    function handleLeftEnd(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (!isLeftPressed) return;
+        isLeftPressed = false;
+        if (steerLeftBtn) steerLeftBtn.classList.remove('active');
+        updateSteerAxis();
+        dispatchKeyEvent('keyup', 'ArrowLeft', 'ArrowLeft', 37);
+        dispatchKeyEvent('keyup', 'KeyA', 'a', 65);
+    }
+
+    function handleRightStart(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (isRightPressed) return;
+        isRightPressed = true;
+        if (steerRightBtn) steerRightBtn.classList.add('active');
+        updateSteerAxis();
+        dispatchKeyEvent('keydown', 'ArrowRight', 'ArrowRight', 39);
+        dispatchKeyEvent('keydown', 'KeyD', 'd', 68);
+    }
+
+    function handleRightEnd(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (!isRightPressed) return;
+        isRightPressed = false;
+        if (steerRightBtn) steerRightBtn.classList.remove('active');
+        updateSteerAxis();
+        dispatchKeyEvent('keyup', 'ArrowRight', 'ArrowRight', 39);
+        dispatchKeyEvent('keyup', 'KeyD', 'd', 68);
+    }
+
+    function bindSteerButton(elem, onStart, onEnd) {
+        if (!elem) return;
+        elem.addEventListener('pointerdown', (e) => {
+            try { elem.setPointerCapture(e.pointerId); } catch (err) {}
+            onStart(e);
+        });
+        elem.addEventListener('pointerup', onEnd);
+        elem.addEventListener('pointercancel', onEnd);
+        elem.addEventListener('pointerleave', (e) => {
+            if (e.buttons === 0) onEnd(e);
+        });
+        elem.addEventListener('touchstart', onStart, { passive: false });
+        elem.addEventListener('touchend', onEnd, { passive: false });
+        elem.addEventListener('touchcancel', onEnd, { passive: false });
+        elem.addEventListener('mousedown', onStart);
+        elem.addEventListener('mouseup', onEnd);
+    }
+
+    bindSteerButton(steerLeftBtn, handleLeftStart, handleLeftEnd);
+    bindSteerButton(steerRightBtn, handleRightStart, handleRightEnd);
+
+    // Global release listeners so sliding off the button never leaves steering stuck
+    window.addEventListener('pointerup', () => {
+        if (isLeftPressed) handleLeftEnd();
+        if (isRightPressed) handleRightEnd();
+    });
+    window.addEventListener('touchend', () => {
+        if (isLeftPressed) handleLeftEnd();
+        if (isRightPressed) handleRightEnd();
+    });
+    window.addEventListener('mouseup', () => {
+        if (isLeftPressed) handleLeftEnd();
+        if (isRightPressed) handleRightEnd();
+    });
+
+    // Watch for car entry/exit transitions
+    const carStateObserver = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            if (m.type === 'attributes' && m.attributeName === 'data-state-car') {
+                const inCar = document.body.getAttribute('data-state-car') === '1';
+                if (!inCar) {
+                    // Exited car: release all steer inputs cleanly
+                    isLeftPressed = false;
+                    isRightPressed = false;
+                    if (steerLeftBtn) steerLeftBtn.classList.remove('active');
+                    if (steerRightBtn) steerRightBtn.classList.remove('active');
+                    updateSteerAxis();
+                    dispatchKeyEvent('keyup', 'ArrowLeft', 'ArrowLeft', 37);
+                    dispatchKeyEvent('keyup', 'KeyA', 'a', 65);
+                    dispatchKeyEvent('keyup', 'ArrowRight', 'ArrowRight', 39);
+                    dispatchKeyEvent('keyup', 'KeyD', 'd', 68);
+                } else {
+                    // Entered car: zero out on-foot joystick drift
+                    emulator.MoveAxis(0, 0, 0.0);
+                    emulator.MoveAxis(0, 1, 0.0);
+                }
+            }
+        }
+    });
+    carStateObserver.observe(document.body, { attributes: true, attributeFilter: ['data-state-car'] });
 }
 
 const clickToPlay = document.querySelector('.click-to-play');

@@ -1041,22 +1041,66 @@
             }
         }
 
-        // Memory buffer cache for parallel prefetching
+        // Memory buffer cache for instant zero-latency asset retrieval
         const memoryBufferCache = new Map();
+        const inFlightRequests = new Map();
         let totalBytesLoaded = 0;
+        let memoryCacheBytes = 0;
+        const MAX_MEMORY_CACHE_BYTES = 256 * 1024 * 1024; // 256MB RAM cache budget
+
+        // Pinned critical asset keys that are never evicted from RAM
+        const pinnedCriticalKeys = new Set();
+
+        async function fetchWithRetry(url, retries = 3, backoff = 200) {
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 10000);
+                    const res = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timer);
+                    if (res.ok) {
+                        return await res.arrayBuffer();
+                    }
+                    if (res.status === 404) {
+                        return null;
+                    }
+                } catch (e) {
+                    if (attempt === retries) return null;
+                }
+                if (attempt < retries) {
+                    await new Promise(r => setTimeout(r, backoff * Math.pow(2, attempt)));
+                }
+            }
+            return null;
+        }
 
         async function getAssetBuffer(path) {
             const candidates = assetCandidates(path);
 
-            // 1. Check custom uploaded files
+            // 0. Check in-memory buffer cache first (immediate resolution)
+            for (const cand of candidates) {
+                const k = cand.toLowerCase();
+                if (memoryBufferCache.has(k)) {
+                    const val = memoryBufferCache.get(k);
+                    if (val instanceof Promise) {
+                        const buf = await val;
+                        if (buf && buf.byteLength > 0) return buf;
+                    } else if (val && val.byteLength > 0) {
+                        return val;
+                    }
+                }
+            }
+
+            // 1. Check custom uploaded files (from folder/drag-drop)
             for (const cand of candidates) {
                 const k = cand.toLowerCase();
                 if (filesMap.has(k)) {
                     const buf = await readFileAsync(filesMap.get(k));
-                    if (document.getElementById('idbCacheToggle') && document.getElementById('idbCacheToggle').checked) {
+                    if (buf && buf.byteLength > 0) {
+                        memoryBufferCache.set(k, buf);
                         putCachedFile(k, buf);
+                        return buf;
                     }
-                    return buf;
                 }
             }
 
@@ -1064,27 +1108,199 @@
             for (const cand of candidates) {
                 const k = cand.toLowerCase();
                 const cached = await getCachedFile(k);
-                if (cached) {
+                if (cached && cached.byteLength > 0) {
+                    // Populate into memory cache for future instant hits
+                    if (memoryCacheBytes < MAX_MEMORY_CACHE_BYTES) {
+                        memoryBufferCache.set(k, cached);
+                        memoryCacheBytes += cached.byteLength;
+                    }
                     return cached;
                 }
             }
 
-            // 3. Direct HTTP fetch from self-hosted gtavc-assets/local/
+            // 3. Direct HTTP fetch with retry and in-flight request coalescing
             for (const cand of candidates) {
-                try {
+                const k = cand.toLowerCase();
+                if (inFlightRequests.has(k)) {
+                    const buf = await inFlightRequests.get(k);
+                    if (buf && buf.byteLength > 0) return buf;
+                }
+
+                const fetchPromise = (async () => {
                     const url = ASSET_BASE + cand;
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        const buf = await res.arrayBuffer();
-                        if (document.getElementById('idbCacheToggle') && document.getElementById('idbCacheToggle').checked) {
-                            putCachedFile(cand.toLowerCase(), buf);
+                    const buf = await fetchWithRetry(url, 3, 200);
+                    if (buf && buf.byteLength > 0) {
+                        // Store in IndexedDB
+                        putCachedFile(k, buf);
+                        // Store in Memory Cache within budget or if pinned
+                        if (pinnedCriticalKeys.has(k) || memoryCacheBytes < MAX_MEMORY_CACHE_BYTES) {
+                            memoryBufferCache.set(k, buf);
+                            memoryCacheBytes += buf.byteLength;
                         }
                         return buf;
                     }
-                } catch (e) {}
+                    return null;
+                })();
+
+                inFlightRequests.set(k, fetchPromise);
+                try {
+                    const buf = await fetchPromise;
+                    if (buf && buf.byteLength > 0) return buf;
+                } finally {
+                    inFlightRequests.delete(k);
+                }
             }
 
             return null;
+        }
+
+        let progressiveCacheStarted = false;
+
+        function isTier1Critical(filePath) {
+            const fp = filePath.toLowerCase();
+            // Core audio SFX chunks (engine sounds, screech, horns, gunshots, impacts)
+            if (fp.includes('audio/sfx.raw/')) {
+                try {
+                    const num = parseInt(fp.split('/').pop().split('.')[0], 10);
+                    if (num <= 800) return true;
+                } catch (e) {}
+                return false;
+            }
+            // Collision, map data, placement, animation files
+            if (fp.endsWith('.col') || fp.endsWith('.dat') || fp.endsWith('.ide') || fp.endsWith('.ipl') || fp.endsWith('.ifp')) {
+                return true;
+            }
+            // Core vehicles & wheels
+            const vehicleKeywords = [
+                'admiral', 'banshee', 'blistac', 'bobcat', 'bravura', 'cabbie', 'cheetah', 'comet', 
+                'cuban', 'esperant', 'faggio', 'freeway', 'glendale', 'greenwoo', 'hermes', 'idaho', 
+                'infernus', 'kaufman', 'landstal', 'manana', 'mesa', 'oceanic', 'pcj600', 'perenn', 
+                'phoenix', 'police', 'pony', 'rancher', 'regina', 'romero', 'sabre', 'sanchez', 
+                'sandking', 'sentinel', 'stallion', 'stinger', 'stretch', 'taxi', 'topfun', 'trash', 
+                'virgo', 'voodoo', 'walton', 'washngtn', 'wheel'
+            ];
+            // Core weapons
+            const weaponKeywords = [
+                'colt45', 'python', 'shotgun', 'spas12', 'sawnoff', 'tec9', 'uzi', 'ingram', 
+                'mp5', 'm4', 'ak47', 'sniper', 'laser', 'rocketla', 'flame', 'm60', 'minigun', 
+                'grenade', 'molotov', 'knife', 'bat'
+            ];
+            // Core peds
+            const pedKeywords = ['cop', 'civmale', 'civfemale', 'medic', 'fireman', 'ped'];
+
+            for (const kw of vehicleKeywords) {
+                if (fp.includes(kw)) return true;
+            }
+            for (const kw of weaponKeywords) {
+                if (fp.includes(kw)) return true;
+            }
+            for (const kw of pedKeywords) {
+                if (fp.includes(kw)) return true;
+            }
+            return false;
+        }
+
+        async function startProgressiveBackgroundCache() {
+            if (progressiveCacheStarted) return;
+            progressiveCacheStarted = true;
+
+            try {
+                console.log('[BackgroundCache] Fetching stream_files.list manifest...');
+                const text = await (await fetch('stream_files.list?v=' + Date.now())).text();
+                const allStreamFiles = text.split('\n')
+                    .map(l => l.trim())
+                    .filter(l => l.length > 0 && !l.startsWith('#') && l.includes('.'));
+
+                const tier1Critical = [];
+                const tier2Remaining = [];
+
+                for (const f of allStreamFiles) {
+                    if (isTier1Critical(f)) {
+                        tier1Critical.push(f);
+                        pinnedCriticalKeys.add(f.toLowerCase());
+                    } else {
+                        tier2Remaining.push(f);
+                    }
+                }
+
+                console.log(`[BackgroundCache] Total game files: ${allStreamFiles.length}. Tier 1 (Critical): ${tier1Critical.length}, Tier 2 (Progressive): ${tier2Remaining.length}`);
+
+                // Phase 1: Rapid Pre-Warm of Tier 1 Critical files into RAM & IndexedDB
+                console.log('[BackgroundCache] Phase 1: Pre-warming Tier 1 critical files into RAM and IndexedDB...');
+                let t1Index = 0;
+                let t1CachedCount = 0;
+                const T1_CONCURRENCY = 6;
+
+                async function workerTier1() {
+                    while (t1Index < tier1Critical.length) {
+                        const file = tier1Critical[t1Index++];
+                        const k = file.toLowerCase();
+                        // Check if already in memory or DB
+                        if (!memoryBufferCache.has(k)) {
+                            const cached = await getCachedFile(k);
+                            if (cached) {
+                                memoryBufferCache.set(k, cached);
+                                memoryCacheBytes += cached.byteLength;
+                                t1CachedCount++;
+                                continue;
+                            }
+                            const buf = await getAssetBuffer(file);
+                            if (buf) {
+                                t1CachedCount++;
+                            }
+                        } else {
+                            t1CachedCount++;
+                        }
+                    }
+                }
+
+                const t1Workers = [];
+                for (let i = 0; i < T1_CONCURRENCY; i++) {
+                    t1Workers.push(workerTier1());
+                }
+                await Promise.all(t1Workers);
+                console.log(`[BackgroundCache] Phase 1 Complete! ${t1CachedCount}/${tier1Critical.length} critical gameplay assets locked into memory.`);
+
+                // Phase 2: Progressive Full-Game Caching into IndexedDB (Low priority / non-intrusive)
+                console.log('[BackgroundCache] Phase 2: Starting progressive background caching of full game into IndexedDB...');
+                let t2Index = 0;
+                const T2_CONCURRENCY = 2; // Low concurrency to avoid competing with gameplay network/CPU
+                let t2CachedCount = 0;
+
+                async function workerTier2() {
+                    while (t2Index < tier2Remaining.length) {
+                        const file = tier2Remaining[t2Index++];
+                        const k = file.toLowerCase();
+                        if (cachedKeysSet && cachedKeysSet.has(k)) {
+                            t2CachedCount++;
+                            continue;
+                        }
+                        const buf = await getAssetBuffer(file);
+                        if (buf) {
+                            t2CachedCount++;
+                        }
+                        // Gentle throttle: yield 25ms to the browser event loop between items
+                        await new Promise(r => setTimeout(r, 25));
+                    }
+                }
+
+                const t2Workers = [];
+                for (let i = 0; i < T2_CONCURRENCY; i++) {
+                    t2Workers.push(workerTier2());
+                }
+                // Launch Phase 2 in background without blocking the caller so game stays responsive
+                Promise.all(t2Workers).then(() => {
+                    console.log(`[BackgroundCache] Full Game Caching Complete! Total cached files: ${allStreamFiles.length}`);
+                    const badge = document.getElementById('assetStatus');
+                    if (badge) {
+                        badge.textContent = '● Entire Game Cached Locally';
+                    }
+                }).catch(err => {
+                    console.warn('[BackgroundCache] Phase 2 worker error:', err);
+                });
+            } catch (err) {
+                console.warn('[BackgroundCache] Background progressive caching notice:', err);
+            }
         }
 
         let isGameStarted = false;
@@ -1168,6 +1384,9 @@
 
             if (data.event === 'game.started') {
                 console.log('[index.html] Game started signal received from engine!');
+                // Start background progressive caching pipeline
+                startProgressiveBackgroundCache();
+
                 // Smoothly fade out the launcher/loading overlay once game is rendering
                 const modal = document.getElementById('launcherModal');
                 if (modal) {
@@ -1269,6 +1488,9 @@
                 }
             } else if (data.event === 'preload.complete') {
                 console.log('[index.html] Preload complete received from engine');
+                // Trigger Tier 1 background pre-warming immediately upon preload completion
+                startProgressiveBackgroundCache();
+
                 document.getElementById('progressBar').style.width = '100%';
                 document.getElementById('progressPct').textContent = '100%';
                 document.getElementById('progressStatus').textContent = 'Starting Vice City engine...';
@@ -1290,12 +1512,12 @@
                 }, 5000);
             } else if (data.event === 'module.getasyncurl' && data.file) {
                 const buffer = await getAssetBuffer(data.file);
-                if (buffer) {
+                if (buffer && buffer.byteLength > 0) {
                     event.source.postMessage({
                         event: '>module.getasyncurl',
                         file: data.file,
                         data: new Uint8Array(buffer),
-                    }, '*', [buffer]);
+                    }, '*', [buffer.slice(0)]);
                 } else {
                     event.source.postMessage({
                         event: '>module.getasyncurl',

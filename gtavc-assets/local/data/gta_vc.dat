@@ -35,7 +35,9 @@ IDE DATA\MAPS\airport\airport.IDE
 IDE DATA\MAPS\airportN\airportN.IDE
 IDE DATA\MAPS\haiti\haiti.IDE
 IDE DATA\MAPS\haitin\haitin.IDE
+
 SPLASH loadsc2
+
 IDE DATA\MAPS\concerth\concerth.IDE
 IDE DATA\MAPS\mansion\mansion.IDE
 IDE DATA\MAPS\islandsf\islandsf.IDE
@@ -43,6 +45,7 @@ IDE DATA\MAPS\stadint\stadint.IDE
 
 #collision data
 COLFILE 0 MODELS\COLL\GENERIC.COL
+
 
 # have to load map.zon before any of the IPLs
 IPL DATA\MAP.ZON
@@ -69,29 +72,30 @@ IPL DATA\MAPS\starisl\starisl.IPL
 IPL DATA\MAPS\nbeachbt\nbeachbt.IPL
 IPL DATA\MAPS\nbeach\nbeach.IPL
 IPL DATA\MAPS\nbeachw\nbeachw.IPL
-# IPL DATA\MAPS\cisland\cisland.IPL
-# IPL DATA\MAPS\airport\airport.IPL
-# IPL DATA\MAPS\airportN\airportN.IPL
-# IPL DATA\MAPS\haiti\haiti.IPL
-# IPL DATA\MAPS\haitin\haitin.IPL
-# IPL DATA\MAPS\islandsf\islandsf.IPL
-# IPL DATA\MAPS\stadint\stadint.IPL
+IPL DATA\MAPS\cisland\cisland.IPL
+IPL DATA\MAPS\airport\airport.IPL
+IPL DATA\MAPS\airportN\airportN.IPL
+IPL DATA\MAPS\haiti\haiti.IPL
+IPL DATA\MAPS\haitin\haitin.IPL
+IPL DATA\MAPS\islandsf\islandsf.IPL
+IPL DATA\MAPS\stadint\stadint.IPL
 
-IPL DATA\MAPS\hotel\hotel.IPL
+IPL DATA\MAPS\paths.ipl
 IPL DATA\MAPS\cull.ipl
 IPL DATA\occlu.ipl
-# IPL DATA\MAPS\paths.ipl
+
 
 #
 #  Interiors
 #
 SPLASH loadsc4
 
-# IPL DATA\MAPS\bank\bank.IPL
-# IPL DATA\MAPS\mall\mall.IPL
-# IPL DATA\MAPS\yacht\yacht.IPL
-# IPL DATA\MAPS\club\club.IPL
-# IPL DATA\MAPS\lawyers\lawyers.IPL
-# IPL DATA\MAPS\stripclb\stripclb.IPL
-# IPL DATA\MAPS\concerth\concerth.IPL
-# IPL DATA\MAPS\mansion\mansion.IPL
+IPL DATA\MAPS\bank\bank.IPL
+IPL DATA\MAPS\mall\mall.IPL
+IPL DATA\MAPS\yacht\yacht.IPL
+IPL DATA\MAPS\club\club.IPL
+IPL DATA\MAPS\hotel\hotel.IPL
+IPL DATA\MAPS\lawyers\lawyers.IPL
+IPL DATA\MAPS\stripclb\stripclb.IPL
+IPL DATA\MAPS\concerth\concerth.IPL
+IPL DATA\MAPS\mansion\mansion.IPL

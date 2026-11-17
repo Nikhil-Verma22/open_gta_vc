@@ -1060,6 +1060,13 @@ function getRevcIni() {
         // Enforce safe 800x600 VideoMode so reVC doesn't crash on invalid mode index
         ini = ini.replace(/Width=\d+/g, 'Width=800');
         ini = ini.replace(/Height=\d+/g, 'Height=600');
+        // Enforce active pedestrian and car traffic density
+        if (!ini.includes('PedDensity=')) {
+            ini = ini.replace('[Display]', '[Display]\nPedDensity=1.200000\nCarDensity=1.200000');
+        } else {
+            ini = ini.replace(/PedDensity=[\d\.]+/g, 'PedDensity=1.200000');
+            ini = ini.replace(/CarDensity=[\d\.]+/g, 'CarDensity=1.200000');
+        }
         localStorage.setItem('vcsky.revc.ini', ini);
         return ini;
     }
